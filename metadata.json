@@ -1,0 +1,6 @@
+{
+  "name": "SafeRoute AI",
+  "description": "Human-centric intelligent route planning with accessibility, safety, and mobility barrier awareness. Routes that understand you.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
