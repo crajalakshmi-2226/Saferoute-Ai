@@ -8,6 +8,7 @@ import {
   BarrierReport,
   SavedPlace,
   JourneyHistoryItem,
+  ScoringWeights,
 } from './types';
 import { MOBILITY_PROFILES } from './data/mobilityProfiles';
 import { useTheme } from './hooks/useTheme';
@@ -16,6 +17,7 @@ import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { TokenSetupModal } from './components/TokenSetupModal';
 import { WelcomeOnboardingModal } from './components/screens/WelcomeOnboardingModal';
+import { AuthAndOnboardingScreen } from './components/screens/AuthAndOnboardingScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { SearchRouteScreen } from './components/screens/SearchRouteScreen';
 import { RouteDetailsScreen } from './components/screens/RouteDetailsScreen';
@@ -31,9 +33,15 @@ import { SavedPlacesScreen } from './components/screens/SavedPlacesScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { PipelineScreen } from './components/screens/PipelineScreen';
 import { ImpactAndRoadmapScreen } from './components/screens/ImpactAndRoadmapScreen';
-import { ScoringWeights } from './types';
 import { DEFAULT_SCORING_WEIGHTS } from './services/scoringService';
-import { Shield, Sparkles, Navigation, CheckCircle2 } from 'lucide-react';
+import {
+  auth,
+  onAuthStateChanged,
+  getUserProfile,
+  logoutUser,
+  UserProfileData,
+} from './services/firebase';
+import { Shield } from 'lucide-react';
 
 export default function App() {
   const { theme, setTheme } = useTheme();
@@ -43,6 +51,14 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+
+  // User Authentication & Profile state
+  const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
+  const [isGuest, setIsGuest] = useState<boolean>(() => {
+    return localStorage.getItem('saferoute_is_guest') === 'true';
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'auth' | 'onboarding'>('auth');
 
   // Configurable multi-factor scoring weights
   const [scoringWeights, setScoringWeights] = useState<ScoringWeights>(() => {
@@ -161,17 +177,53 @@ export default function App() {
 
   const [targetDestinationPlace, setTargetDestinationPlace] = useState<SavedPlace | undefined>(undefined);
 
-  // Splash screen timeout & first-visit onboarding check
+  // Splash screen timeout
   useEffect(() => {
     const splashTimer = setTimeout(() => {
       setShowSplash(false);
-      const seenOnboarding = localStorage.getItem('saferoute_onboarding_seen');
-      if (!seenOnboarding) {
-        setIsOnboardingOpen(true);
-      }
-    }, 900);
+    }, 850);
 
     return () => clearTimeout(splashTimer);
+  }, []);
+
+  // Firebase auth state listener on app launch
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        try {
+          const profile = await getUserProfile(currentUser.uid);
+          if (profile) {
+            setUserProfile(profile);
+            setIsGuest(false);
+            localStorage.removeItem('saferoute_is_guest');
+            if (profile.mobilityProfile) {
+              const matched = MOBILITY_PROFILES.find((p) => p.id === profile.mobilityProfile);
+              if (matched) {
+                setActiveProfile(matched);
+              }
+            }
+            if (profile.mobilityPreferences) {
+              setActivePreferences(profile.mobilityPreferences as MobilityPreferences);
+            }
+          } else {
+            // Logged in but profile record incomplete: open onboarding
+            setIsAuthOpen(true);
+            setAuthInitialMode('onboarding');
+          }
+        } catch (err) {
+          console.warn('Profile fetch notice:', err);
+        }
+      } else {
+        // Not signed in: if not marked guest, show Welcome & Auth screen
+        const guestFlag = localStorage.getItem('saferoute_is_guest');
+        if (!guestFlag) {
+          setIsAuthOpen(true);
+          setAuthInitialMode('auth');
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Fetch verified barriers from full-stack API
@@ -279,7 +331,6 @@ export default function App() {
   // Complete journey handler
   const handleCompleteJourney = (route: RouteAlternative, barriersAvoided: number) => {
     setCompletedJourneyData({ route, barriersAvoided });
-    // Add to journey log
     const newHistoryItem: JourneyHistoryItem = {
       id: `jh-${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -296,6 +347,43 @@ export default function App() {
     localStorage.setItem('saferoute_recent_journeys', JSON.stringify(updatedHistory));
     setNavSession(null);
     setActiveScreen('journey_summary');
+  };
+
+  // Auth flow callbacks
+  const handleAuthSuccess = (profile: UserProfileData) => {
+    setUserProfile(profile);
+    setIsGuest(false);
+    localStorage.removeItem('saferoute_is_guest');
+    if (profile.mobilityProfile) {
+      const matched = MOBILITY_PROFILES.find((p) => p.id === profile.mobilityProfile);
+      if (matched) {
+        setActiveProfile(matched);
+      }
+    }
+    if (profile.mobilityPreferences) {
+      setActivePreferences(profile.mobilityPreferences as MobilityPreferences);
+    }
+    setIsAuthOpen(false);
+  };
+
+  const handleContinueAsGuest = () => {
+    setIsGuest(true);
+    localStorage.setItem('saferoute_is_guest', 'true');
+    setIsAuthOpen(false);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.warn('Sign out notice:', err);
+    }
+    setUserProfile(null);
+    setIsGuest(false);
+    localStorage.removeItem('saferoute_is_guest');
+    setIsAuthOpen(true);
+    setAuthInitialMode('auth');
+    setActiveScreen('home');
   };
 
   // Screen 1: Splash Screen
@@ -332,6 +420,12 @@ export default function App() {
         onOpenProfiles={() => setActiveScreen('profiles')}
         onGoHome={() => setActiveScreen('home')}
         activeScreen={activeScreen}
+        userProfile={userProfile}
+        isGuest={isGuest}
+        onOpenAuth={() => {
+          setAuthInitialMode('auth');
+          setIsAuthOpen(true);
+        }}
       />
 
       {/* Main Container */}
@@ -509,6 +603,17 @@ export default function App() {
             scoringWeights={scoringWeights}
             onUpdateScoringWeights={handleUpdateScoringWeights}
             onNavigateToScreen={setActiveScreen}
+            userProfile={userProfile}
+            isGuest={isGuest}
+            onOpenAuth={() => {
+              setAuthInitialMode('auth');
+              setIsAuthOpen(true);
+            }}
+            onSignOut={handleSignOut}
+            onOpenOnboarding={() => {
+              setAuthInitialMode('onboarding');
+              setIsAuthOpen(true);
+            }}
           />
         )}
       </main>
@@ -526,15 +631,25 @@ export default function App() {
         isOpen={isTokenModalOpen}
         onClose={() => setIsTokenModalOpen(false)}
         onTokenSaved={() => {
-          // Trigger re-render
+          // Re-render
         }}
       />
 
-      {/* Welcome & Onboarding Modal */}
+      {/* Welcome & Info Modal */}
       <WelcomeOnboardingModal
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
       />
+
+      {/* Full Modern Welcome & Authentication and Onboarding Flow */}
+      {isAuthOpen && (
+        <AuthAndOnboardingScreen
+          initialMode={authInitialMode}
+          onAuthSuccess={handleAuthSuccess}
+          onContinueAsGuest={handleContinueAsGuest}
+          onClose={userProfile || isGuest ? () => setIsAuthOpen(false) : undefined}
+        />
+      )}
     </div>
   );
 }

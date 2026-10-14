@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal mobility settings, accessibility preferences, and location context",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase Authentication User ID",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User's full name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address",
+          "maxLength": 120
+        },
+        "currentLocationName": {
+          "type": "string",
+          "description": "User selected or geocoded locality name",
+          "maxLength": 200
+        },
+        "currentLocationLat": {
+          "type": "number",
+          "description": "Latitude coordinate"
+        },
+        "currentLocationLng": {
+          "type": "number",
+          "description": "Longitude coordinate"
+        },
+        "mobilityProfile": {
+          "type": "string",
+          "enum": ["general", "wheelchair", "elderly", "visual_assistance", "walking_difficulty", "temporary_injury"],
+          "description": "Active mobility profile selected by the user"
+        },
+        "mobilityPreferences": {
+          "type": "object",
+          "description": "Fine-grained barrier avoidance and navigation preferences",
+          "properties": {
+            "avoidStairs": { "type": "boolean" },
+            "preferRamps": { "type": "boolean" },
+            "avoidSteepSlopes": { "type": "boolean" },
+            "preferStableSurfaces": { "type": "boolean" },
+            "preferSaferCrossings": { "type": "boolean" },
+            "avoidNarrowPassages": { "type": "boolean" },
+            "preferAccessibleEntrances": { "type": "boolean" },
+            "enableSpokenGuidance": { "type": "boolean" },
+            "maxWalkingDistanceMeters": { "type": "number" }
+          }
+        },
+        "onboardingCompleted": {
+          "type": "boolean",
+          "description": "Whether the user finished initial onboarding"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp in ISO or server timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["uid", "fullName", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Private user profile documents, accessible only by the authenticated owner"
+    }
+  }
+}

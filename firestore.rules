@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny all unexpected collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.uid is string &&
+             data.uid == request.auth.uid &&
+             data.fullName is string &&
+             data.fullName.size() >= 1 &&
+             data.fullName.size() <= 100 &&
+             data.email is string &&
+             data.email.size() <= 120 &&
+             (!('currentLocationName' in data) || (data.currentLocationName is string && data.currentLocationName.size() <= 200)) &&
+             (!('currentLocationLat' in data) || (data.currentLocationLat is number)) &&
+             (!('currentLocationLng' in data) || (data.currentLocationLng is number)) &&
+             (!('mobilityProfile' in data) || (data.mobilityProfile in ['general', 'wheelchair', 'elderly', 'visual_assistance', 'walking_difficulty', 'temporary_injury'])) &&
+             (!('mobilityPreferences' in data) || (data.mobilityPreferences is map)) &&
+             (!('onboardingCompleted' in data) || (data.onboardingCompleted is bool)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    // Users Collection: Private user profile documents
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Blanket user list queries are disallowed to protect user privacy
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == existing().uid;
+      allow delete: if isOwner(userId);
+    }
+  }
+}
