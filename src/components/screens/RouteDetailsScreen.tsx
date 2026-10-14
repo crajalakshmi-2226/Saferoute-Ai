@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { RouteAlternative, MobilityProfile, MobilityPreferences, BarrierReport } from '../../types';
+import { RouteAlternative, MobilityProfile, MobilityPreferences, BarrierReport, ScoringWeights } from '../../types';
+import { DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
 import {
   ArrowLeft,
   Navigation,
@@ -23,6 +24,7 @@ interface Props {
   activeProfile: MobilityProfile;
   activePreferences: MobilityPreferences;
   knownBarriers: BarrierReport[];
+  scoringWeights?: ScoringWeights;
 }
 
 export const RouteDetailsScreen: React.FC<Props> = ({
@@ -32,6 +34,7 @@ export const RouteDetailsScreen: React.FC<Props> = ({
   activeProfile,
   activePreferences,
   knownBarriers,
+  scoringWeights = DEFAULT_SCORING_WEIGHTS,
 }) => {
   const [explanation, setExplanation] = useState<string>('');
   const [loadingExplain, setLoadingExplain] = useState(false);
@@ -148,7 +151,7 @@ export const RouteDetailsScreen: React.FC<Props> = ({
             <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Accessibility</span>
-                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">40%</span>
+                <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-mono">{scoringWeights.accessibility}%</span>
               </div>
               <div className="text-lg font-bold font-mono text-white mt-2">
                 {route.accessibilityScore}<span className="text-xs text-slate-400">/100</span>
@@ -159,7 +162,7 @@ export const RouteDetailsScreen: React.FC<Props> = ({
             <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Safety</span>
-                <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">25%</span>
+                <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded font-mono">{scoringWeights.safety}%</span>
               </div>
               <div className="text-lg font-bold font-mono text-white mt-2">
                 {route.safetyScore}<span className="text-xs text-slate-400">/100</span>
@@ -170,7 +173,7 @@ export const RouteDetailsScreen: React.FC<Props> = ({
             <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Preferences</span>
-                <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">25%</span>
+                <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded font-mono">{scoringWeights.preference}%</span>
               </div>
               <div className="text-lg font-bold font-mono text-white mt-2">
                 {route.preferenceScore}<span className="text-xs text-slate-400">/100</span>
@@ -181,7 +184,7 @@ export const RouteDetailsScreen: React.FC<Props> = ({
             <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400">Distance</span>
-                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">10%</span>
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-mono">{scoringWeights.distance}%</span>
               </div>
               <div className="text-lg font-bold font-mono text-white mt-2">
                 {route.distanceScore}<span className="text-xs text-slate-400">/100</span>

@@ -7,9 +7,10 @@ import {
   MobilityPreferences,
   BarrierReport,
   SavedPlace,
+  ScoringWeights,
 } from '../../types';
 import { searchPlaces, fetchWalkingRoutes } from '../../services/mapboxService';
-import { evaluateRoute } from '../../services/scoringService';
+import { evaluateRoute, DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
 import { MapboxMap } from '../MapboxMap';
 import {
   Search,
@@ -41,6 +42,7 @@ interface Props {
   onOpenRouteDetails: (route: RouteAlternative) => void;
   savedPlaces: SavedPlace[];
   initialDestination?: SavedPlace;
+  scoringWeights?: ScoringWeights;
 }
 
 export const SearchRouteScreen: React.FC<Props> = ({
@@ -55,6 +57,7 @@ export const SearchRouteScreen: React.FC<Props> = ({
   onOpenRouteDetails,
   savedPlaces,
   initialDestination,
+  scoringWeights = DEFAULT_SCORING_WEIGHTS,
 }) => {
   // Origin State
   const [originMode, setOriginMode] = useState<'current_location' | 'manual'>(
@@ -155,7 +158,7 @@ export const SearchRouteScreen: React.FC<Props> = ({
 
       // Evaluate and score all alternatives using our multi-factor scoring formula
       const scored: RouteAlternative[] = rawRoutes.map((r: any, idx: number) =>
-        evaluateRoute(r, idx, activeProfile, activePreferences, knownBarriers)
+        evaluateRoute(r, idx, activeProfile, activePreferences, knownBarriers, scoringWeights)
       );
 
       // Sort by suitability score descending

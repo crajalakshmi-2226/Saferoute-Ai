@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ThemeMode } from '../../types';
+import { ThemeMode, ScoringWeights } from '../../types';
 import { getMapboxToken } from '../../services/mapboxService';
+import { DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
 import {
   Settings,
   Key,
@@ -17,7 +18,12 @@ import {
   ExternalLink,
   HelpCircle,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Sliders,
+  RotateCcw,
+  GitCommit,
+  Globe2,
+  ChevronRight
 } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 
@@ -25,17 +31,30 @@ interface Props {
   theme: ThemeMode;
   onSetTheme: (theme: ThemeMode) => void;
   onOpenTokenModal: () => void;
+  scoringWeights: ScoringWeights;
+  onUpdateScoringWeights: (weights: ScoringWeights) => void;
+  onNavigateToScreen: (screenId: string) => void;
 }
 
 export const SettingsScreen: React.FC<Props> = ({
   theme,
   onSetTheme,
   onOpenTokenModal,
+  scoringWeights,
+  onUpdateScoringWeights,
+  onNavigateToScreen,
 }) => {
   const [hasMapboxToken, setHasMapboxToken] = useState(false);
   const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
   const [checkingBackend, setCheckingBackend] = useState(false);
   const { isInstalled, isInstallable, isIOS } = usePWAInstall();
+
+  // Local weights state
+  const [localWeights, setLocalWeights] = useState<ScoringWeights>(scoringWeights);
+
+  useEffect(() => {
+    setLocalWeights(scoringWeights);
+  }, [scoringWeights]);
 
   useEffect(() => {
     const t = getMapboxToken();
@@ -61,6 +80,20 @@ export const SettingsScreen: React.FC<Props> = ({
     checkHealth();
   }, []);
 
+  const handleWeightSlider = (key: keyof ScoringWeights, val: number) => {
+    const next = { ...localWeights, [key]: val };
+    setLocalWeights(next);
+    onUpdateScoringWeights(next);
+  };
+
+  const handleResetWeights = () => {
+    setLocalWeights(DEFAULT_SCORING_WEIGHTS);
+    onUpdateScoringWeights(DEFAULT_SCORING_WEIGHTS);
+  };
+
+  const totalWeight =
+    localWeights.accessibility + localWeights.safety + localWeights.preference + localWeights.distance;
+
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
@@ -70,15 +103,155 @@ export const SettingsScreen: React.FC<Props> = ({
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">Application Settings & Credentials</h1>
+            <h1 className="text-lg font-extrabold text-white">Application Settings & Configuration</h1>
             <p className="text-xs text-slate-400">
-              API configuration, appearance, permissions, and offline PWA status
+              Scoring models, Mapbox credentials, AI status, and system specifications
             </p>
           </div>
         </div>
       </div>
 
-      {/* 1. Mapbox API Token Configuration */}
+      {/* Quick Access to Architecture & Roadmap */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div
+          onClick={() => onNavigateToScreen('pipeline')}
+          className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/50 cursor-pointer transition flex items-center justify-between group shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-600/15 text-blue-400 border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition">
+              <GitCommit className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-xs text-white group-hover:text-blue-400 transition">
+                6-Stage Routing Pipeline
+              </h3>
+              <p className="text-[11px] text-slate-400">Inspect the end-to-end algorithmic flow</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-blue-400 group-hover:translate-x-0.5 transition" />
+        </div>
+
+        <div
+          onClick={() => onNavigateToScreen('impact')}
+          className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition flex items-center justify-between group shadow-md"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-600/15 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-600 group-hover:text-white transition">
+              <Globe2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-xs text-white group-hover:text-emerald-400 transition">
+                Impact, SDGs & 5-Phase Roadmap
+              </h3>
+              <p className="text-[11px] text-slate-400">UN SDG 10/11 alignment & expansion roadmap</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-0.5 transition" />
+        </div>
+      </div>
+
+      {/* 1. Configurable Scoring Model Weights */}
+      <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 text-indigo-400" />
+            <div>
+              <h2 className="text-sm font-bold text-white">Configurable Route Scoring Formula</h2>
+              <p className="text-[11px] text-slate-400">Adjust the multi-factor optimization balance</p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleResetWeights}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 transition"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset (40/25/25/10)</span>
+          </button>
+        </div>
+
+        <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 leading-relaxed">
+          The baseline scoring model is an implementation starting point calibrated for inclusive pedestrian safety. Weights are automatically normalized before calculating the final suitability score.
+        </div>
+
+        {/* Sliders Grid */}
+        <div className="space-y-3.5 pt-1">
+          {/* Accessibility Weight */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-200">Accessibility (Ramps, step-free, surface)</span>
+              <span className="font-mono font-bold text-blue-400">{localWeights.accessibility}%</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="70"
+              step="5"
+              value={localWeights.accessibility}
+              onChange={(e) => handleWeightSlider('accessibility', parseInt(e.target.value, 10))}
+              className="w-full accent-blue-600 cursor-pointer"
+            />
+          </div>
+
+          {/* Safety Weight */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-200">Safety (Controlled crossings, lighting, reports)</span>
+              <span className="font-mono font-bold text-cyan-400">{localWeights.safety}%</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="50"
+              step="5"
+              value={localWeights.safety}
+              onChange={(e) => handleWeightSlider('safety', parseInt(e.target.value, 10))}
+              className="w-full accent-cyan-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Preference Match Weight */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-200">User Preference Match (Profile endurance limits)</span>
+              <span className="font-mono font-bold text-indigo-400">{localWeights.preference}%</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="50"
+              step="5"
+              value={localWeights.preference}
+              onChange={(e) => handleWeightSlider('preference', parseInt(e.target.value, 10))}
+              className="w-full accent-indigo-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Distance Weight */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-200">Distance Factor (Shortest route penalty)</span>
+              <span className="font-mono font-bold text-emerald-400">{localWeights.distance}%</span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="40"
+              step="5"
+              value={localWeights.distance}
+              onChange={(e) => handleWeightSlider('distance', parseInt(e.target.value, 10))}
+              className="w-full accent-emerald-500 cursor-pointer"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800">
+          <span>Active Weight Sum: <strong className="font-mono text-white">{totalWeight}%</strong> (Normalized)</span>
+          <span className="text-emerald-400 font-medium">Auto-applied to live routing engine</span>
+        </div>
+      </div>
+
+      {/* 2. Mapbox API Token Configuration */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -114,7 +287,7 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 2. Server-side Gemini AI Status */}
+      {/* 3. Server-side Gemini AI Status */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -144,7 +317,7 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 3. Theme Mode Selection */}
+      {/* 4. Theme Mode Selection */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -195,7 +368,7 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 4. Browser Permissions & Geolocation */}
+      {/* 5. Browser Permissions & Geolocation */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -217,7 +390,7 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 5. Data Architecture & Honest Transparency */}
+      {/* 6. Data Architecture & Honest Transparency */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-3">
         <div className="flex items-center gap-2.5 pb-2 border-b border-slate-800">
           <Database className="w-5 h-5 text-indigo-400" />
@@ -225,7 +398,7 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
 
         <p className="text-xs text-slate-300 leading-relaxed">
-          In this runtime environment, community barrier reports, facility audits, and user bookmarks are managed via full-stack Express REST APIs with in-memory persistence and client <code>localStorage</code> synchronization. If PostgreSQL is provisioned in the future, the backend seamlessly routes to relational Prisma migrations.
+          In this runtime environment, community barrier reports, facility audits, and user bookmarks are managed via full-stack Express REST APIs with in-memory persistence and client <code>localStorage</code> synchronization. If PostgreSQL + PostGIS is provisioned in the future, the backend seamlessly routes to relational Prisma migrations.
         </p>
       </div>
     </div>

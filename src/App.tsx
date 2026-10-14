@@ -29,6 +29,10 @@ import { MultiProfileSimulationScreen } from './components/screens/MultiProfileS
 import { JourneySummaryScreen } from './components/screens/JourneySummaryScreen';
 import { SavedPlacesScreen } from './components/screens/SavedPlacesScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
+import { PipelineScreen } from './components/screens/PipelineScreen';
+import { ImpactAndRoadmapScreen } from './components/screens/ImpactAndRoadmapScreen';
+import { ScoringWeights } from './types';
+import { DEFAULT_SCORING_WEIGHTS } from './services/scoringService';
 import { Shield, Sparkles, Navigation, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -39,6 +43,22 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+
+  // Configurable multi-factor scoring weights
+  const [scoringWeights, setScoringWeights] = useState<ScoringWeights>(() => {
+    const saved = localStorage.getItem('saferoute_scoring_weights');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return DEFAULT_SCORING_WEIGHTS;
+  });
+
+  const handleUpdateScoringWeights = (weights: ScoringWeights) => {
+    setScoringWeights(weights);
+    localStorage.setItem('saferoute_scoring_weights', JSON.stringify(weights));
+  };
 
   // Navigation mode & profile
   const [navigationMode, setNavigationMode] = useState<NavigationMode>('accessibility');
@@ -300,7 +320,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-150">
       {/* Top Navbar */}
       <Navbar
         navigationMode={navigationMode}
@@ -354,6 +374,7 @@ export default function App() {
             }}
             savedPlaces={savedPlaces}
             initialDestination={targetDestinationPlace}
+            scoringWeights={scoringWeights}
           />
         )}
 
@@ -381,6 +402,7 @@ export default function App() {
             activeProfile={activeProfile}
             activePreferences={activePreferences}
             knownBarriers={knownBarriers}
+            scoringWeights={scoringWeights}
           />
         )}
 
@@ -450,6 +472,14 @@ export default function App() {
           />
         )}
 
+        {activeScreen === 'pipeline' && (
+          <PipelineScreen onGoToPlanner={() => setActiveScreen('search')} />
+        )}
+
+        {activeScreen === 'impact' && (
+          <ImpactAndRoadmapScreen />
+        )}
+
         {activeScreen === 'journey_summary' && completedJourneyData && (
           <JourneySummaryScreen
             completedRoute={completedJourneyData.route}
@@ -476,6 +506,9 @@ export default function App() {
             theme={theme}
             onSetTheme={setTheme}
             onOpenTokenModal={() => setIsTokenModalOpen(true)}
+            scoringWeights={scoringWeights}
+            onUpdateScoringWeights={handleUpdateScoringWeights}
+            onNavigateToScreen={setActiveScreen}
           />
         )}
       </main>

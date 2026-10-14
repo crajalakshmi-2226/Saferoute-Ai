@@ -4,7 +4,15 @@ import {
   RouteAlternative,
   RouteStep,
   BarrierReport,
+  ScoringWeights,
 } from '../types';
+
+export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
+  accessibility: 40,
+  safety: 25,
+  preference: 25,
+  distance: 10,
+};
 
 // Haversine formula to compute distance in meters between two [lng, lat] points
 export function distanceBetweenCoordsMeters(
@@ -54,7 +62,8 @@ export function evaluateRoute(
   index: number,
   profile: MobilityProfile,
   preferences: MobilityPreferences,
-  knownBarriers: BarrierReport[]
+  knownBarriers: BarrierReport[],
+  weights: ScoringWeights = DEFAULT_SCORING_WEIGHTS
 ): RouteAlternative {
   const distanceMeters = Math.round(rawRoute.distance);
   const durationMinutes = Math.round((rawRoute.duration / 60) * 10) / 10;
@@ -171,16 +180,26 @@ export function evaluateRoute(
   const baseIdealDist = 600; // 600m baseline
   let distanceScore = Math.max(20, Math.min(100, Math.round(100 - (Math.max(0, distanceMeters - baseIdealDist) / 100))));
 
-  // Overall Suitability Score with exact prompt weights:
-  // Accessibility: 40%
-  // Safety: 25%
-  // User preferences: 25%
-  // Distance: 10%
-  const overallSuitabilityScore = Math.round(
-    accessibilityScore * 0.40 +
-    safetyScore * 0.25 +
-    preferenceScore * 0.25 +
-    distanceScore * 0.10
+  // Overall Suitability Score with normalized weights:
+  // Default: Accessibility 40%, Safety 25%, Preferences 25%, Distance 10%
+  const totalWeight =
+    (weights.accessibility + weights.safety + weights.preference + weights.distance) || 100;
+  const normAccess = weights.accessibility / totalWeight;
+  const normSafety = weights.safety / totalWeight;
+  const normPref = weights.preference / totalWeight;
+  const normDist = weights.distance / totalWeight;
+
+  const overallSuitabilityScore = Math.max(
+    5,
+    Math.min(
+      100,
+      Math.round(
+        accessibilityScore * normAccess +
+        safetyScore * normSafety +
+        preferenceScore * normPref +
+        distanceScore * normDist
+      )
+    )
   );
 
   if (detectedObstacles.length === 0) {

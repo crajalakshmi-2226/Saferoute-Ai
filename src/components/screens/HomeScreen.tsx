@@ -25,7 +25,9 @@ import {
   Sparkles,
   MapPin,
   Flame,
-  Users
+  Users,
+  GitCommit,
+  Globe2
 } from 'lucide-react';
 import { MOBILITY_PROFILES } from '../../data/mobilityProfiles';
 
@@ -332,6 +334,36 @@ export const HomeScreen: React.FC<Props> = ({
             </h3>
             <p className="text-[10px] text-slate-400 mt-1">
               Frequent destinations and past verified journeys
+            </p>
+          </div>
+
+          <div
+            onClick={() => onNavigateToScreen('pipeline')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/50 cursor-pointer transition"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition mb-2.5">
+              <GitCommit className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-bold text-white group-hover:text-blue-400 transition">
+              6-Stage Pipeline
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Technical pipeline from profile to live guidance
+            </p>
+          </div>
+
+          <div
+            onClick={() => onNavigateToScreen('impact')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/50 cursor-pointer transition"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-600 group-hover:text-white transition mb-2.5">
+              <Globe2 className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-bold text-white group-hover:text-blue-400 transition">
+              Impact & Roadmap
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1">
+              SDG 10/11 alignment & 5-phase product roadmap
             </p>
           </div>
         </div>

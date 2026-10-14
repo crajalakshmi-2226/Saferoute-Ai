@@ -20,6 +20,15 @@ export interface MobilityPreferences {
   maxWalkingDistanceMeters: number; // e.g. 800m
 }
 
+export interface ScoringWeights {
+  accessibility: number; // default 40%
+  safety: number;        // default 25%
+  preference: number;    // default 25%
+  distance: number;      // default 10%
+}
+
+export type DataCategory = 'verified' | 'community' | 'ai_predicted' | 'unknown';
+
 export interface MobilityProfile {
   id: MobilityProfileType;
   name: string;
