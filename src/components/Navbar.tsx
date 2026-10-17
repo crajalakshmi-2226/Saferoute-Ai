@@ -9,9 +9,12 @@ import {
   Compass,
   User,
   LogIn,
+  Globe,
+  PhoneCall,
 } from 'lucide-react';
 import { NavigationMode, MobilityProfile, ThemeMode } from '../types';
 import { UserProfileData } from '../services/firebase';
+import { Language } from '../utils/translations';
 
 interface Props {
   navigationMode: NavigationMode;
@@ -26,6 +29,9 @@ interface Props {
   userProfile: UserProfileData | null;
   isGuest: boolean;
   onOpenAuth: () => void;
+  language: Language;
+  onToggleLanguage: (lang: Language) => void;
+  onOpenEmergency: () => void;
 }
 
 export const Navbar: React.FC<Props> = ({
@@ -41,6 +47,9 @@ export const Navbar: React.FC<Props> = ({
   userProfile,
   isGuest,
   onOpenAuth,
+  language,
+  onToggleLanguage,
+  onOpenEmergency,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
@@ -110,13 +119,13 @@ export const Navbar: React.FC<Props> = ({
             <button
               onClick={onOpenSettings}
               className="flex items-center gap-1.5 rounded-xl bg-slate-900 border border-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white hover:border-slate-700 transition cursor-pointer"
-              title={`Logged in as ${userProfile.fullName || userProfile.email}`}
+              title={`Logged in as ${userProfile.fullName || userProfile.email || 'User'}`}
             >
               <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
                 {userProfile.fullName?.charAt(0) || userProfile.email?.charAt(0) || 'U'}
               </div>
               <span className="hidden lg:inline max-w-[100px] truncate">
-                {userProfile.fullName || userProfile.email.split('@')[0]}
+                {userProfile.fullName || (userProfile.email ? userProfile.email.split('@')[0] : 'User')}
               </span>
             </button>
           ) : isGuest ? (
@@ -129,6 +138,26 @@ export const Navbar: React.FC<Props> = ({
               <span className="hidden sm:inline">Sign In</span>
             </button>
           ) : null}
+
+          {/* Quick Emergency SOS button */}
+          <button
+            onClick={onOpenEmergency}
+            className="flex items-center gap-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 px-2.5 py-1.5 text-xs font-extrabold text-rose-300 hover:text-white transition cursor-pointer active:scale-95"
+            title="Immediate Emergency Assistance (112 SOS)"
+          >
+            <PhoneCall className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+            <span className="font-mono text-xs">112 SOS</span>
+          </button>
+
+          {/* Language Switcher */}
+          <button
+            onClick={() => onToggleLanguage(language === 'en' ? 'ta' : 'en')}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-300 hover:text-white transition cursor-pointer"
+            title={language === 'en' ? 'தமிழுக்கு மாறவும் (Switch to Tamil)' : 'Switch to English'}
+          >
+            <Globe className="w-3.5 h-3.5 text-blue-400" />
+            <span>{language === 'en' ? 'தமிழ்' : 'English'}</span>
+          </button>
 
           {/* Theme Toggle Cycle */}
           <div className="flex items-center rounded-xl bg-slate-900 border border-slate-800 p-0.5">

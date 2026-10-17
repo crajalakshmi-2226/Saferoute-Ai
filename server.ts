@@ -3,6 +3,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import {
+  VERIFIED_LEGAL_DATABASE,
+  OFFICIAL_LEGAL_SOURCES,
+  findMatchingLegalProvision,
+} from './src/data/legalKnowledgeBase';
+import {
+  VERIFIED_HELP_PLACES,
+  getDistanceMeters,
+} from './src/data/nearbyHelpData';
 
 dotenv.config();
 
@@ -408,6 +417,371 @@ Provide a concise, respectful, transparent explanation (2-3 short paragraphs) st
       details: error.message
     });
   }
+});
+
+// 6. AI Legal Rights Assistant (Gemini 3.8 Flash + Verified Legal Knowledge Base)
+app.post('/api/legal-assist', async (req, res) => {
+  const { message, language = 'en', history = [] } = req.body;
+
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid user message.' });
+  }
+
+  const ai = getGeminiClient();
+  const matchedDbEntry = findMatchingLegalProvision(message);
+
+  // If Gemini key is not configured, return deterministic verified legal response
+  if (!ai) {
+    if (matchedDbEntry) {
+      return res.json({
+        success: true,
+        generatedBy: 'deterministic_legal_engine',
+        response_text: language === 'ta'
+          ? `உங்கள் கேள்விக்கான சரிபார்க்கப்பட்ட சட்ட வழிகாட்டல்:\n\nசட்டம்: ${matchedDbEntry.actNameTamil}\nபிரிவு: ${matchedDbEntry.section}\n\n${matchedDbEntry.summaryTamil}\n\nஅதிகாரப்பூர்வ துறை: ${matchedDbEntry.authorityTamil}\n\nஅடுத்த கட்ட நடைமுறை: ${matchedDbEntry.procedureSummaryTamil}`
+          : `Verified legal information regarding your query:\n\nAct: ${matchedDbEntry.actName}\nProvision: ${matchedDbEntry.section}\n\n${matchedDbEntry.summaryEnglish}\n\nReceiving Authority: ${matchedDbEntry.authority}\n\nNext Step: ${matchedDbEntry.procedureSummary}`,
+        tamil_summary: matchedDbEntry.summaryTamil,
+        english_summary: matchedDbEntry.summaryEnglish,
+        identified_category: matchedDbEntry.category,
+        follow_up_question: language === 'ta'
+          ? 'சம்பவம் நிகழ்ந்த இடம், தேதி அல்லது பேருந்து எண் போன்ற கூடுதல் விவரங்கள் உள்ளனவா?'
+          : 'Could you share the location, date, or vehicle registration number if available?',
+        legal_provisions: [
+          {
+            actName: matchedDbEntry.actName,
+            actNameTamil: matchedDbEntry.actNameTamil,
+            section: matchedDbEntry.section,
+            title: matchedDbEntry.title,
+            summaryEnglish: matchedDbEntry.summaryEnglish,
+            summaryTamil: matchedDbEntry.summaryTamil,
+            verifiedStatus: matchedDbEntry.verifiedStatus,
+            officialUrl: matchedDbEntry.officialUrl,
+            penaltyOrRemedy: matchedDbEntry.penaltyOrRemedy,
+            penaltyOrRemedyTamil: matchedDbEntry.penaltyOrRemedyTamil
+          }
+        ],
+        receiving_authority: matchedDbEntry.authority,
+        authorityTamil: matchedDbEntry.authorityTamil,
+        practical_next_steps: [
+          'Move to a safe, well-lit public area or nearest assistance booth.',
+          matchedDbEntry.procedureSummary,
+          'Keep any photos, tickets, or witness details ready for documentation.',
+          'Consider generating an official complaint draft using the button below.'
+        ],
+        practical_next_steps_tamil: [
+          'உடனடியாக வெளிச்சமுள்ள பாதுகாப்பான பகுதிக்கு செல்லுங்கள்.',
+          matchedDbEntry.procedureSummaryTamil,
+          'பேருந்து டிக்கெட், புகைப்படங்கள் அல்லது நேரடி சாட்சிகளை ஆவணப்படுத்துங்கள்.',
+          'கீழே உள்ள பொத்தானைப் பயன்படுத்தி முறைப்படி புகார் மனுவைத் தயாரிக்கலாம்.'
+        ],
+        nearby_help_type: matchedDbEntry.category.includes('Women') ? 'women_police' : 'police',
+        can_draft_complaint: true,
+        disclaimer: 'This information is for guidance and awareness only. It does not substitute formal legal advice from a licensed advocate or police officer.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      generatedBy: 'deterministic_legal_engine',
+      response_text: language === 'ta'
+        ? 'நான் உங்கள் கேள்வியை ஆராய்ந்தேன். துல்லியமான சட்டப் பிரிவை உடனடியாக உறுதிப்படுத்த முடியவில்லை. அருகிலுள்ள காவல் உதவி மையம் (112), மகளிர் உதவி எண் (1091) அல்லது மாவட்ட சட்டப் பணிகள் ஆணைக்குழுவை (DLSA) தொடர்பு கொள்ளலாம்.'
+        : 'I could not verify the exact applicable section. Here is the closest relevant official guidance: for immediate concerns, please contact national emergency services at 112, women helpline at 1091, or the District Legal Services Authority (DLSA).',
+      tamil_summary: 'துல்லியமான சட்டப் பிரிவை உறுதிப்படுத்த முடியவில்லை. பொது பாதுகாப்பு நெறிமுறைகளைப் பின்பற்றவும்.',
+      english_summary: 'Exact legal section could not be verified automatically. Follow standard civic reporting and safety protocols.',
+      identified_category: 'Other incident',
+      follow_up_question: language === 'ta' ? 'நடந்த சம்பவம் குறித்து இன்னும் சில தகவல்களைத் தர முடியுமா?' : 'Could you provide a few more details about what occurred?',
+      legal_provisions: [],
+      receiving_authority: 'Local Police Station / District Legal Services Authority',
+      authorityTamil: 'உள்ளூர் காவல் நிலையம் / மாவட்ட சட்டப் பணிகள் ஆணைக்குழு',
+      practical_next_steps: ['Move to safety', 'Call 112 if in danger', 'Consult District Legal Services Authority (DLSA)'],
+      practical_next_steps_tamil: ['பாதுகாப்பான இடத்திற்கு செல்லவும்', 'ஆபத்து என்றால் 112-ஐ அழைக்கவும்'],
+      nearby_help_type: 'police',
+      can_draft_complaint: true,
+      disclaimer: 'Informational assistance only.'
+    });
+  }
+
+  // Gemini 3.8 Flash Powered Analysis
+  try {
+    const verifiedKnowledgeContext = JSON.stringify(VERIFIED_LEGAL_DATABASE.slice(0, 10));
+
+    const prompt = `You are the certified Legal Rights, Personal Safety, and Official Procedure Assistant of SafeRoute AI.
+You assist citizens in understanding applicable Indian Central Laws, Tamil Nadu State Laws, Rules, and official complaint procedures.
+
+USER MESSAGE: "${message}"
+REQUESTED LANGUAGE: "${language === 'ta' ? 'Tamil (தமிழ்) and English' : 'English and Tamil'}"
+RECENT HISTORY: ${JSON.stringify(history.slice(-4))}
+
+CURATED VERIFIED LEGAL DATABASE REFERENCE:
+${verifiedKnowledgeContext}
+
+OFFICIAL AUTHORITATIVE SOURCE URLS:
+- India Code: https://www.indiacode.nic.in/
+- Tamil Nadu Government: https://www.tn.gov.in/
+- Tamil Nadu Police: https://eservices.tnpolice.gov.in/
+- Central Pollution Control Board: https://cpcb.nic.in/
+- National Commission for Women: https://www.ncw.gov.in/
+- National Cyber Crime Reporting Portal: https://cybercrime.gov.in/
+- National Consumer Helpline: https://consumerhelpline.gov.in/
+
+STRICT RULES:
+1. Understand the user's description. Support both colloquial Tamil, English, and Tanglish naturally.
+2. Ask a brief follow-up question when important facts (date, exact location, vehicle number, persons involved) are missing.
+3. Identify the possible incident category without declaring anyone guilty.
+4. If the exact applicable section cannot be verified, state verbatim: "I could not verify the exact applicable section. Here is the closest relevant official guidance."
+5. Never invent legal sections, police powers, complaint portals, or penalties.
+6. Clearly distinguish between:
+   - Confirmed legal information
+   - Potentially relevant provisions
+   - General practical guidance
+   - Information that requires professional verification by an advocate or police officer.
+7. Suggest the suitable complaint category and the appropriate official authority (e.g. Station House Officer, RTO, AWPS, District Collector, Consumer Commission).
+8. Provide practical immediate next steps and safety advice.
+9. Offer to create a complaint draft.
+
+Respond strictly in valid JSON with this schema:
+{
+  "response_text": "Direct user response in conversational ${language === 'ta' ? 'Tamil' : 'English'}",
+  "tamil_summary": "Simple, clear Tamil summary preserving exact official Act and Section names",
+  "english_summary": "Clear, concise English legal summary",
+  "identified_category": "One of: Harassment or intimidation | Theft | Physical assault or violence | Sexual harassment | Public noise complaint | Road damage or dangerous obstruction | Accessibility barrier | Transport-related complaint | Consumer complaint | Cybercrime | Public-service complaint | Other incident",
+  "follow_up_question": "Brief follow-up question if essential facts are missing, or null",
+  "legal_provisions": [
+    {
+      "actName": "Official Act or Rule name",
+      "actNameTamil": "Official Act name in Tamil",
+      "section": "Exact section or rule (e.g. Rule 231-A TN MVR / Section 4 TN PHW Act / Section 303(2) BNS 2023)",
+      "title": "Short title of provision",
+      "titleTamil": "Short title in Tamil",
+      "summaryEnglish": "Factual explanation of what the law states",
+      "summaryTamil": "எளிய தமிழ் விளக்கம்",
+      "verifiedStatus": "verified" | "potential" | "unverified",
+      "officialUrl": "Valid official URL from list above"
+    }
+  ],
+  "receiving_authority": "Exact official receiving authority name",
+  "authorityTamil": "அதிகாரப்பூர்வ துறை/அதிகாரி பெயர்",
+  "practical_next_steps": ["step 1", "step 2", "step 3"],
+  "practical_next_steps_tamil": ["படி 1", "படி 2", "படி 3"],
+  "nearby_help_type": "police" | "women_police" | "hospital" | "legal_aid" | "pharmacy" | "civic_office",
+  "can_draft_complaint": true,
+  "disclaimer": "This information is provided for citizen guidance and awareness. It does not constitute formal legal counsel. Verification by a licensed advocate or police officer is recommended."
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    return res.json({
+      success: true,
+      generatedBy: 'gemini-3.8-flash',
+      ...parsed
+    });
+  } catch (error: any) {
+    console.error('Legal assist error:', error);
+    // Fallback gracefully to verified knowledge base
+    if (matchedDbEntry) {
+      return res.json({
+        success: true,
+        generatedBy: 'fallback_verified_engine',
+        response_text: language === 'ta' ? matchedDbEntry.summaryTamil : matchedDbEntry.summaryEnglish,
+        tamil_summary: matchedDbEntry.summaryTamil,
+        english_summary: matchedDbEntry.summaryEnglish,
+        identified_category: matchedDbEntry.category,
+        legal_provisions: [matchedDbEntry],
+        receiving_authority: matchedDbEntry.authority,
+        authorityTamil: matchedDbEntry.authorityTamil,
+        practical_next_steps: [matchedDbEntry.procedureSummary],
+        practical_next_steps_tamil: [matchedDbEntry.procedureSummaryTamil],
+        nearby_help_type: 'police',
+        can_draft_complaint: true,
+        disclaimer: 'Assistive guidance based on official statutes.'
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Failed to process legal inquiry.',
+      details: error.message
+    });
+  }
+});
+
+// 7. AI-Assisted Complaint Generator (Structured, Editable, Grounded)
+app.post('/api/generate-complaint', async (req, res) => {
+  const {
+    category,
+    description,
+    incidentDate,
+    location,
+    desiredAssistance,
+    language = 'en',
+    evidenceList = []
+  } = req.body;
+
+  if (!description) {
+    return res.status(400).json({ error: 'Missing incident description.' });
+  }
+
+  const ai = getGeminiClient();
+  const matchedEntry = findMatchingLegalProvision(description + ' ' + (category || ''));
+
+  const prompt = `You are an expert citizen legal draft generator for SafeRoute AI.
+Generate a structured, formal, and editable complaint draft based ONLY on the user's provided facts.
+
+DO NOT invent witness names, accused identities, injuries, dates, or events not present in the user text.
+Clearly distinguish between user-provided facts and standard legal draft formatting.
+
+USER PROVIDED DETAILS:
+- Category: ${category || 'Incident'}
+- What Happened: "${description}"
+- Date & Time: ${incidentDate || 'Not specified by user'}
+- Location: ${location || 'Not specified by user'}
+- Desired Assistance: ${desiredAssistance || 'Appropriate official action and investigation'}
+- Evidence Available: ${JSON.stringify(evidenceList)}
+- Preferred Language: ${language}
+
+MATCHED STATUTORY PROVISION:
+${matchedEntry ? JSON.stringify(matchedEntry) : 'General official representation'}
+
+OFFICIAL PORTALS:
+- Tamil Nadu Police Citizen Services: https://eservices.tnpolice.gov.in/
+- National Cyber Crime Portal: https://cybercrime.gov.in/
+- National Consumer Helpline: https://consumerhelpline.gov.in/
+- Greater Chennai Corporation Civic Portal: https://chennaicorporation.gov.in/
+
+Output strictly valid JSON with this schema:
+{
+  "subject": "Formal, concise subject line",
+  "addressedTo": "Designation of Appropriate Officer (e.g., Station House Officer / Regional Transport Officer / District Consumer Commission / Cyber Crime Wing)",
+  "addressedToTamil": "அதிகாரியின் பதவிப் பெயர்",
+  "incidentDetails": {
+    "date": "${incidentDate || 'As mentioned in complaint'}",
+    "location": "${location || 'As mentioned in complaint'}",
+    "category": "${category || 'General Incident'}"
+  },
+  "chronologicalFacts": [
+    "Fact 1 strictly extracted from user text",
+    "Fact 2 strictly extracted from user text"
+  ],
+  "availableEvidence": [
+    "Evidence item 1 from list"
+  ],
+  "applicableLegalProvisions": [
+    "Act and section if verified, or statement 'Subject to preliminary police inquiry'"
+  ],
+  "requestedAction": "Clear prayer/request for relief (e.g., Registration of FIR, inspection, refund)",
+  "officialPortalUrl": "Valid portal URL from list above",
+  "fullFormattedDraft": "Complete, formal complaint letter formatted ready to be copied and printed",
+  "fullFormattedDraftTamil": "முழுமையான முறையான தமிழ் புகார் மனு"
+}`;
+
+  if (!ai) {
+    const authority = matchedEntry?.authority || 'The Station House Officer / Concerned Municipal Officer';
+    const act = matchedEntry?.actName || 'Applicable Provisions of Law';
+    const sec = matchedEntry?.section || 'Relevant Section';
+    const draftText = `To,\n${authority}\n\nSubject: Formal Complaint regarding ${category || 'Incident'} at ${location || 'the mentioned location'}\n\nRespected Sir/Madam,\n\nI am writing to formally bring to your attention an incident that occurred on ${incidentDate || 'the specified date'} at ${location || 'the specified location'}.\n\nStatement of Facts (As provided by complainant):\n${description}\n\nAvailable Evidence:\n${evidenceList.length > 0 ? evidenceList.map((e: any) => `- ${e.name || e}`).join('\n') : '- Photographs / Video recordings preserved by complainant.'}\n\nRelevant Applicable Legal Provision:\n${act} (${sec})\n\nPrayer / Relief Sought:\n${desiredAssistance || 'Kindly register this complaint, conduct an urgent inquiry, and initiate appropriate official action under the law.'}\n\nYours faithfully,\n[Complainant Name]\n[Contact Information]`;
+
+    return res.json({
+      success: true,
+      generatedBy: 'deterministic_draft_engine',
+      draft: {
+        subject: `Complaint regarding ${category || 'Incident'} at ${location || 'Tamil Nadu'}`,
+        addressedTo: authority,
+        addressedToTamil: matchedEntry?.authorityTamil || 'காவல் நிலைய பொறுப்பு அதிகாரி',
+        incidentDetails: { date: incidentDate, location, category },
+        chronologicalFacts: [description],
+        availableEvidence: evidenceList.map((e: any) => e.name || String(e)),
+        applicableLegalProvisions: [matchedEntry ? `${matchedEntry.actName} (${matchedEntry.section})` : 'Applicable Rules & Regulations'],
+        requestedAction: desiredAssistance || 'Registration of complaint and necessary official inquiry.',
+        officialPortalUrl: matchedEntry?.officialUrl || 'https://eservices.tnpolice.gov.in/',
+        fullFormattedDraft: draftText,
+        fullFormattedDraftTamil: `பெறுநர்:\n${matchedEntry?.authorityTamil || 'காவல் நிலைய பொறுப்பு அதிகாரி'}\n\nபொருள்: ${category || 'சம்பவம்'} தொடர்பான புகார் மனு.\n\nமதிப்பிற்குரிய ஐயா / அம்மா,\n\n${incidentDate || 'குறிப்பிட்ட நாளில்'} ${location || 'குறிப்பிட்ட இடத்தில்'} நடந்த சம்பவம் குறித்து இந்த மனுவை சமர்ப்பிக்கிறேன்.\n\nநிகழ்ந்த விவரம்:\n${description}\n\nசட்டப் பிரிவு: ${matchedEntry ? matchedEntry.actNameTamil + ' (' + matchedEntry.section + ')' : 'பொருந்தக்கூடிய சட்டப் பிரிவுகள்'}\n\nகோரிக்கை:\n${desiredAssistance || 'இந்த மனுவை ஏற்று உரிய சட்டப்பூர்வ நடவடிக்கை எடுக்குமாறு பணிவுடன் கேட்டுக்கொள்கிறேன்.'}\n\nஇங்ஙனம்,\n[மனுதாரர் பெயர்]`
+      }
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    return res.json({
+      success: true,
+      generatedBy: 'gemini-3.8-flash',
+      draft: parsed
+    });
+  } catch (error: any) {
+    console.error('Complaint generation error:', error);
+    return res.status(500).json({
+      error: 'Failed to generate complaint draft.',
+      details: error.message
+    });
+  }
+});
+
+// 8. Nearby Help & Emergency Services Directory Endpoint
+app.get('/api/nearby-help', (req, res) => {
+  const { lat, lng, category, maxDistanceMeters, search } = req.query;
+
+  let results = [...VERIFIED_HELP_PLACES];
+
+  // Category filter
+  if (category && typeof category === 'string' && category !== 'all') {
+    results = results.filter((p) => p.category === category);
+  }
+
+  // Text search
+  if (search && typeof search === 'string') {
+    const s = search.toLowerCase();
+    results = results.filter(
+      (p) =>
+        p.name.toLowerCase().includes(s) ||
+        p.nameTamil.toLowerCase().includes(s) ||
+        p.address.toLowerCase().includes(s) ||
+        p.servicesAvailable.some((serv) => serv.toLowerCase().includes(s))
+    );
+  }
+
+  // Distance computation
+  const userLat = lat ? parseFloat(String(lat)) : undefined;
+  const userLng = lng ? parseFloat(String(lng)) : undefined;
+
+  let mapped = results.map((place) => {
+    let distanceMeters: number | undefined;
+    if (userLat !== undefined && userLng !== undefined && !isNaN(userLat) && !isNaN(userLng)) {
+      distanceMeters = getDistanceMeters(userLat, userLng, place.lat, place.lng);
+    }
+    return {
+      ...place,
+      distanceMeters
+    };
+  });
+
+  if (userLat !== undefined && userLng !== undefined) {
+    mapped.sort((a, b) => (a.distanceMeters || 0) - (b.distanceMeters || 0));
+
+    if (maxDistanceMeters) {
+      const maxDist = parseFloat(String(maxDistanceMeters));
+      if (!isNaN(maxDist)) {
+        mapped = mapped.filter((p) => p.distanceMeters !== undefined && p.distanceMeters <= maxDist);
+      }
+    }
+  }
+
+  res.json({
+    count: mapped.length,
+    places: mapped,
+    userLocationProvided: !!(userLat !== undefined && userLng !== undefined)
+  });
 });
 
 // Configure Vite middleware or static serving

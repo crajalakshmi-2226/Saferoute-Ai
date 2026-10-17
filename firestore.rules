@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // Hardened Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -46,6 +46,33 @@ service cloud.firestore {
              (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
     }
 
+    function isValidIncidentReport(data, userId) {
+      return data.id is string &&
+             data.id.size() >= 1 &&
+             data.id.size() <= 128 &&
+             data.userId is string &&
+             data.userId == request.auth.uid &&
+             data.userId == userId &&
+             data.category is string &&
+             data.category.size() >= 1 &&
+             data.category.size() <= 100 &&
+             data.description is string &&
+             data.description.size() >= 1 &&
+             data.description.size() <= 5000 &&
+             data.status in ['draft_created', 'ready_for_review', 'opened_official_channel', 'submitted_confirmed'] &&
+             (!('incidentDate' in data) || (data.incidentDate is string && data.incidentDate.size() <= 50)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
+             (!('latitude' in data) || (data.latitude is number)) &&
+             (!('longitude' in data) || (data.longitude is number)) &&
+             (!('preferredLanguage' in data) || (data.preferredLanguage in ['en', 'ta'])) &&
+             (!('desiredAssistance' in data) || (data.desiredAssistance is string && data.desiredAssistance.size() <= 300)) &&
+             (!('complaintDraft' in data) || (data.complaintDraft is string && data.complaintDraft.size() <= 10000)) &&
+             (!('receivingAuthority' in data) || (data.receivingAuthority is string && data.receivingAuthority.size() <= 200)) &&
+             (!('officialPortalUrl' in data) || (data.officialPortalUrl is string && data.officialPortalUrl.size() <= 500)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
     // Users Collection: Private user profile documents
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -53,6 +80,14 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
       allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) && incoming().uid == existing().uid;
       allow delete: if isOwner(userId);
+
+      // Subcollection: Confidential Incident Reports & Complaint Drafts
+      match /reports/{reportId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(reportId) && isValidIncidentReport(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(reportId) && isValidIncidentReport(incoming(), userId) && incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(reportId);
+      }
     }
   }
 }

@@ -38,6 +38,7 @@ import { MOBILITY_PROFILES } from '../../data/mobilityProfiles';
 import { MobilityProfile, MobilityPreferences, Coordinates } from '../../types';
 import { requestCurrentPosition } from '../../services/locationService';
 import { reverseGeocode } from '../../services/mapboxService';
+import { safeStorage } from '../../utils/storage';
 
 interface Props {
   onAuthSuccess: (userProfile: UserProfileData) => void;
@@ -305,11 +306,11 @@ export const AuthAndOnboardingScreen: React.FC<Props> = ({
       if (auth.currentUser) {
         await saveUserProfile(profilePayload);
       }
-      // Save local backup
-      localStorage.setItem('saferoute_user_profile', JSON.stringify(profilePayload));
-      localStorage.setItem('saferoute_active_profile', selectedProfileId);
-      localStorage.setItem('saferoute_preferences', JSON.stringify(preferences));
-      localStorage.setItem('saferoute_onboarding_seen', 'true');
+      // Save local backup safely
+      safeStorage.setItem('saferoute_user_profile', JSON.stringify(profilePayload));
+      safeStorage.setItem('saferoute_active_profile', selectedProfileId);
+      safeStorage.setItem('saferoute_preferences', JSON.stringify(preferences));
+      safeStorage.setItem('saferoute_onboarding_seen', 'true');
 
       onAuthSuccess(profilePayload);
     } catch (err: any) {

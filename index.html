@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>SafeRoute AI — Routes that understand you</title>
-    <meta name="description" content="Human-centric intelligent route planning with accessibility, safety, and mobility barrier awareness. Routes that understand you." />
-    <meta property="og:title" content="SafeRoute AI — Routes that understand you" />
-    <meta property="og:description" content="Human-centric intelligent route planning with accessibility, safety, and mobility barrier awareness. Routes that understand you." />
+    <title>SafeRoute AI — Accessible Navigation, Legal Rights & Safety Assistant</title>
+    <meta name="description" content="SafeRoute AI — Accessible Navigation, Legal Rights & Safety Assistant. Understand your rights, find nearby help, report incidents, and navigate with barrier awareness." />
+    <meta property="og:title" content="SafeRoute AI — Accessible Navigation, Legal Rights & Safety Assistant" />
+    <meta property="og:description" content="SafeRoute AI — Accessible Navigation, Legal Rights & Safety Assistant. Understand your rights, find nearby help, report incidents, and navigate with barrier awareness." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#0f172a" />
@@ -24,7 +24,25 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
-    <div id="root"></div>
+    <div id="root">
+      <div style="min-height: 100vh; background-color: #020617; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 24px;">
+        <div style="width: 64px; height: 64px; border-radius: 20px; background: linear-gradient(135deg, #2563eb, #06b6d4); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.4);">
+          <svg style="width: 32px; height: 32px; fill: none; stroke: #ffffff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;" viewBox="0 0 24 24">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; margin-bottom: 6px;">
+          SafeRoute <span style="color: #60a5fa;">AI</span>
+        </div>
+        <div style="font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #94a3b8; margin-bottom: 24px;">
+          Routes that understand you
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; font-family: monospace;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #3b82f6;"></div>
+          <span>Loading accessible routes...</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

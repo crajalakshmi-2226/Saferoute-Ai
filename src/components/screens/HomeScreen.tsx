@@ -27,9 +27,15 @@ import {
   Flame,
   Users,
   GitCommit,
-  Globe2
+  Globe2,
+  Scale,
+  PhoneCall,
+  FileText,
+  ShieldAlert,
+  FolderHeart
 } from 'lucide-react';
 import { MOBILITY_PROFILES } from '../../data/mobilityProfiles';
+import { TRANSLATIONS, Language } from '../../utils/translations';
 
 interface Props {
   navigationMode: NavigationMode;
@@ -43,6 +49,7 @@ interface Props {
   savedPlaces: SavedPlace[];
   recentJourneys: JourneyHistoryItem[];
   onSelectSavedPlace: (place: SavedPlace) => void;
+  language: Language;
 }
 
 export const HomeScreen: React.FC<Props> = ({
@@ -57,7 +64,9 @@ export const HomeScreen: React.FC<Props> = ({
   savedPlaces,
   recentJourneys,
   onSelectSavedPlace,
+  language,
 }) => {
+  const t = TRANSLATIONS[language];
   return (
     <div className="space-y-6 pb-20">
       {/* 1. Install App Option near top of Home page */}
@@ -130,7 +139,159 @@ export const HomeScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 3. Navigation Mode Selector */}
+      {/* 3. Rights, Safety & Legal Help Section (New Primary Feature) */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+              {language === 'ta' ? 'அதிகாரப்பூர்வ சட்ட & பாதுகாப்பு மையம்' : 'Citizen Protection & Assistance'}
+            </span>
+          </div>
+          <h2 className="text-base sm:text-lg font-extrabold text-white">
+            {t.rightsSectionTitle}
+          </h2>
+          <p className="text-xs text-slate-400">
+            {t.rightsSectionSubtitle}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {/* Card 1: Ask a Legal Question */}
+          <div
+            onClick={() => onNavigateToScreen('legal_assist')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/60 cursor-pointer transition shadow-md hover:shadow-blue-900/20 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition mb-2.5">
+                <Scale className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-blue-400 transition">
+                {t.askLegalQuestion}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t.askLegalQuestionDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-blue-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'கேள்வி கேளுங்கள்' : 'Consult Assistant'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Card 2: Report an Incident */}
+          <div
+            onClick={() => onNavigateToScreen('report_incident')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-500/60 cursor-pointer transition shadow-md hover:shadow-amber-900/20 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/20 group-hover:bg-amber-600 group-hover:text-white transition mb-2.5">
+                <FileText className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-400 transition">
+                {t.reportIncident}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t.reportIncidentDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-amber-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'புகார் படிவம்' : 'File Report'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Card 3: Find Nearby Help */}
+          <div
+            onClick={() => onNavigateToScreen('nearby_help')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/60 cursor-pointer transition shadow-md hover:shadow-emerald-900/20 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-600 group-hover:text-white transition mb-2.5">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-400 transition">
+                {t.findNearbyHelp}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t.findNearbyHelpDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-emerald-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'நிலையங்கள் காண்க' : 'View Stations'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Card 4: Emergency Assistance */}
+          <div
+            onClick={() => onNavigateToScreen('emergency')}
+            className="group p-4 rounded-2xl bg-rose-950/20 border border-rose-500/40 hover:border-rose-500 cursor-pointer transition shadow-md hover:shadow-rose-950/40 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-600 text-white shadow-sm mb-2.5">
+                <PhoneCall className="w-4 h-4 animate-pulse" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-rose-400 transition flex items-center gap-1.5">
+                {t.emergencyAssistance}
+                <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-mono">112</span>
+              </h3>
+              <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                {t.emergencyAssistanceDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-bold text-rose-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'அவசர உதவி எண்' : 'Direct Helpline'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Card 5: My Saved Reports */}
+          <div
+            onClick={() => onNavigateToScreen('my_reports')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-purple-500/60 cursor-pointer transition shadow-md hover:shadow-purple-900/20 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/20 group-hover:bg-purple-600 group-hover:text-white transition mb-2.5">
+                <FolderHeart className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-purple-400 transition">
+                {t.mySavedReports}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t.mySavedReportsDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-purple-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'கோப்புகளைப் பார்' : 'View Records'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+
+          {/* Card 6: Accessible Route Planner */}
+          <div
+            onClick={() => onNavigateToScreen('search')}
+            className="group p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-cyan-500/60 cursor-pointer transition shadow-md hover:shadow-cyan-900/20 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/20 group-hover:bg-cyan-600 group-hover:text-white transition mb-2.5">
+                <Compass className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-sm font-bold text-white group-hover:text-cyan-400 transition">
+                {t.accessibleRoutePlanner}
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                {t.accessibleRoutePlannerDesc}
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-cyan-400 group-hover:translate-x-0.5 transition">
+              <span>{language === 'ta' ? 'வழித் திட்டமிடல்' : 'Plan Safe Route'}</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Navigation Mode Selector */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wide">

@@ -1,14 +1,13 @@
 import { GeocodingResult, RouteAlternative, RouteStep, BarrierReport } from '../types';
+import { safeStorage } from '../utils/storage';
 
 const TOKEN_STORAGE_KEY = 'saferoute_mapbox_token';
 
 export function getMapboxToken(): string {
-  // Check localStorage first (user-configured in setup screen)
-  if (typeof window !== 'undefined') {
-    const customToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (customToken && customToken.trim().startsWith('pk.')) {
-      return customToken.trim();
-    }
+  // Check localStorage safely first (user-configured in setup screen)
+  const customToken = safeStorage.getItem(TOKEN_STORAGE_KEY);
+  if (customToken && customToken.trim().startsWith('pk.')) {
+    return customToken.trim();
   }
 
   // Fallback to Vite env var
@@ -21,12 +20,10 @@ export function getMapboxToken(): string {
 }
 
 export function setMapboxToken(token: string): void {
-  if (typeof window !== 'undefined') {
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token.trim());
-    } else {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-    }
+  if (token) {
+    safeStorage.setItem(TOKEN_STORAGE_KEY, token.trim());
+  } else {
+    safeStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 }
 

@@ -33,6 +33,12 @@ import { SavedPlacesScreen } from './components/screens/SavedPlacesScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
 import { PipelineScreen } from './components/screens/PipelineScreen';
 import { ImpactAndRoadmapScreen } from './components/screens/ImpactAndRoadmapScreen';
+import { LegalAssistantScreen } from './components/screens/LegalAssistantScreen';
+import { IncidentReportScreen } from './components/screens/IncidentReportScreen';
+import { ComplaintDraftModal } from './components/screens/ComplaintDraftModal';
+import { NearbyHelpScreen } from './components/screens/NearbyHelpScreen';
+import { EmergencyAssistanceScreen } from './components/screens/EmergencyAssistanceScreen';
+import { MyReportsScreen } from './components/screens/MyReportsScreen';
 import { DEFAULT_SCORING_WEIGHTS } from './services/scoringService';
 import {
   auth,
@@ -40,7 +46,10 @@ import {
   getUserProfile,
   logoutUser,
   UserProfileData,
+  IncidentReportData,
 } from './services/firebase';
+import { safeStorage } from './utils/storage';
+import { Language } from './utils/translations';
 import { Shield } from 'lucide-react';
 
 export default function App() {
@@ -55,14 +64,34 @@ export default function App() {
   // User Authentication & Profile state
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [isGuest, setIsGuest] = useState<boolean>(() => {
-    return localStorage.getItem('saferoute_is_guest') === 'true';
+    return safeStorage.getItem('saferoute_is_guest') === 'true';
   });
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [authInitialMode, setAuthInitialMode] = useState<'auth' | 'onboarding'>('auth');
 
+  // Bilingual Language State ('en' | 'ta')
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = safeStorage.getItem('saferoute_language');
+    return saved === 'ta' ? 'ta' : 'en';
+  });
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    safeStorage.setItem('saferoute_language', lang);
+  };
+
+  // Legal Complaint Draft Modal State
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
+  const [activeDraftData, setActiveDraftData] = useState<any>(null);
+  const [activeReportData, setActiveReportData] = useState<IncidentReportData | null>(null);
+
+  // Pre-filled incident context from legal chat to reporting form
+  const [prefilledReportText, setPrefilledReportText] = useState('');
+  const [prefilledReportCategory, setPrefilledReportCategory] = useState('');
+
   // Configurable multi-factor scoring weights
   const [scoringWeights, setScoringWeights] = useState<ScoringWeights>(() => {
-    const saved = localStorage.getItem('saferoute_scoring_weights');
+    const saved = safeStorage.getItem('saferoute_scoring_weights');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -73,13 +102,13 @@ export default function App() {
 
   const handleUpdateScoringWeights = (weights: ScoringWeights) => {
     setScoringWeights(weights);
-    localStorage.setItem('saferoute_scoring_weights', JSON.stringify(weights));
+    safeStorage.setItem('saferoute_scoring_weights', JSON.stringify(weights));
   };
 
   // Navigation mode & profile
   const [navigationMode, setNavigationMode] = useState<NavigationMode>('accessibility');
   const [activeProfile, setActiveProfile] = useState<MobilityProfile>(() => {
-    const saved = localStorage.getItem('saferoute_active_profile');
+    const saved = safeStorage.getItem('saferoute_active_profile');
     if (saved) {
       const found = MOBILITY_PROFILES.find((p) => p.id === saved);
       if (found) return found;
@@ -88,7 +117,7 @@ export default function App() {
   });
 
   const [activePreferences, setActivePreferences] = useState<MobilityPreferences>(() => {
-    const saved = localStorage.getItem('saferoute_preferences');
+    const saved = safeStorage.getItem('saferoute_preferences');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -107,7 +136,7 @@ export default function App() {
 
   // Saved places & Recent journeys
   const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>(() => {
-    const saved = localStorage.getItem('saferoute_saved_places');
+    const saved = safeStorage.getItem('saferoute_saved_places');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -139,7 +168,7 @@ export default function App() {
   });
 
   const [recentJourneys, setRecentJourneys] = useState<JourneyHistoryItem[]>(() => {
-    const saved = localStorage.getItem('saferoute_recent_journeys');
+    const saved = safeStorage.getItem('saferoute_recent_journeys');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -195,7 +224,7 @@ export default function App() {
           if (profile) {
             setUserProfile(profile);
             setIsGuest(false);
-            localStorage.removeItem('saferoute_is_guest');
+            safeStorage.removeItem('saferoute_is_guest');
             if (profile.mobilityProfile) {
               const matched = MOBILITY_PROFILES.find((p) => p.id === profile.mobilityProfile);
               if (matched) {
@@ -215,7 +244,7 @@ export default function App() {
         }
       } else {
         // Not signed in: if not marked guest, show Welcome & Auth screen
-        const guestFlag = localStorage.getItem('saferoute_is_guest');
+        const guestFlag = safeStorage.getItem('saferoute_is_guest');
         if (!guestFlag) {
           setIsAuthOpen(true);
           setAuthInitialMode('auth');
@@ -266,8 +295,8 @@ export default function App() {
   const handleSaveProfileAndPreferences = (profile: MobilityProfile, prefs: MobilityPreferences) => {
     setActiveProfile(profile);
     setActivePreferences(prefs);
-    localStorage.setItem('saferoute_active_profile', profile.id);
-    localStorage.setItem('saferoute_preferences', JSON.stringify(prefs));
+    safeStorage.setItem('saferoute_active_profile', profile.id);
+    safeStorage.setItem('saferoute_preferences', JSON.stringify(prefs));
     setActiveScreen('home');
   };
 
@@ -313,13 +342,13 @@ export default function App() {
     };
     const updated = [newPlace, ...savedPlaces];
     setSavedPlaces(updated);
-    localStorage.setItem('saferoute_saved_places', JSON.stringify(updated));
+    safeStorage.setItem('saferoute_saved_places', JSON.stringify(updated));
   };
 
   const handleDeleteSavedPlace = (id: string) => {
     const updated = savedPlaces.filter((p) => p.id !== id);
     setSavedPlaces(updated);
-    localStorage.setItem('saferoute_saved_places', JSON.stringify(updated));
+    safeStorage.setItem('saferoute_saved_places', JSON.stringify(updated));
   };
 
   // Route to saved place shortcut
@@ -344,7 +373,7 @@ export default function App() {
     };
     const updatedHistory = [newHistoryItem, ...recentJourneys.slice(0, 19)];
     setRecentJourneys(updatedHistory);
-    localStorage.setItem('saferoute_recent_journeys', JSON.stringify(updatedHistory));
+    safeStorage.setItem('saferoute_recent_journeys', JSON.stringify(updatedHistory));
     setNavSession(null);
     setActiveScreen('journey_summary');
   };
@@ -353,7 +382,7 @@ export default function App() {
   const handleAuthSuccess = (profile: UserProfileData) => {
     setUserProfile(profile);
     setIsGuest(false);
-    localStorage.removeItem('saferoute_is_guest');
+    safeStorage.removeItem('saferoute_is_guest');
     if (profile.mobilityProfile) {
       const matched = MOBILITY_PROFILES.find((p) => p.id === profile.mobilityProfile);
       if (matched) {
@@ -368,7 +397,7 @@ export default function App() {
 
   const handleContinueAsGuest = () => {
     setIsGuest(true);
-    localStorage.setItem('saferoute_is_guest', 'true');
+    safeStorage.setItem('saferoute_is_guest', 'true');
     setIsAuthOpen(false);
   };
 
@@ -380,7 +409,7 @@ export default function App() {
     }
     setUserProfile(null);
     setIsGuest(false);
-    localStorage.removeItem('saferoute_is_guest');
+    safeStorage.removeItem('saferoute_is_guest');
     setIsAuthOpen(true);
     setAuthInitialMode('auth');
     setActiveScreen('home');
@@ -426,6 +455,9 @@ export default function App() {
           setAuthInitialMode('auth');
           setIsAuthOpen(true);
         }}
+        language={language}
+        onToggleLanguage={handleSetLanguage}
+        onOpenEmergency={() => setActiveScreen('emergency')}
       />
 
       {/* Main Container */}
@@ -446,6 +478,7 @@ export default function App() {
             savedPlaces={savedPlaces}
             recentJourneys={recentJourneys}
             onSelectSavedPlace={handleRouteToSavedPlace}
+            language={language}
           />
         )}
 
@@ -595,6 +628,92 @@ export default function App() {
           />
         )}
 
+        {/* Rights, Safety & Legal Help Screens */}
+        {activeScreen === 'legal_assist' && (
+          <LegalAssistantScreen
+            language={language}
+            onOpenReportWithIncident={(text, cat) => {
+              setPrefilledReportText(text);
+              setPrefilledReportCategory(cat || '');
+              setActiveScreen('report_incident');
+            }}
+            onOpenNearbyHelp={(helpType) => {
+              setActiveScreen('nearby_help');
+            }}
+          />
+        )}
+
+        {activeScreen === 'report_incident' && (
+          <IncidentReportScreen
+            language={language}
+            userProfile={userProfile}
+            isGuest={isGuest}
+            initialDescription={prefilledReportText}
+            initialCategory={prefilledReportCategory}
+            onOpenDraftModal={(draft, report) => {
+              setActiveDraftData(draft);
+              setActiveReportData(report);
+              setIsDraftModalOpen(true);
+            }}
+            onGoToMyReports={() => setActiveScreen('my_reports')}
+          />
+        )}
+
+        {activeScreen === 'nearby_help' && (
+          <NearbyHelpScreen
+            language={language}
+            currentLocation={currentLocation}
+            onUseCurrentLocation={handleUseCurrentLocation}
+            isLocating={isLocating}
+            onPlanRouteToDestination={(destCoords, destName) => {
+              handleRouteToSavedPlace({
+                id: `help-dst-${Date.now()}`,
+                name: destName,
+                address: destName,
+                icon: 'transit',
+                coordinates: destCoords,
+              });
+            }}
+          />
+        )}
+
+        {activeScreen === 'emergency' && (
+          <EmergencyAssistanceScreen
+            language={language}
+            onNavigateToScreen={setActiveScreen}
+          />
+        )}
+
+        {activeScreen === 'my_reports' && (
+          <MyReportsScreen
+            language={language}
+            userProfile={userProfile}
+            isGuest={isGuest}
+            onOpenReportForm={() => {
+              setPrefilledReportText('');
+              setPrefilledReportCategory('');
+              setActiveScreen('report_incident');
+            }}
+            onViewDraft={(report) => {
+              setActiveReportData(report);
+              setActiveDraftData({
+                subject: `${report.category} - ${report.location || 'Reported Incident'}`,
+                addressedTo: report.receivingAuthority || 'Concerned Station House Officer',
+                addressedToTamil: 'காவல் நிலைய பொறுப்பு அதிகாரி',
+                fullFormattedDraft: report.complaintDraft || report.description,
+                fullFormattedDraftTamil: report.complaintDraft || report.description,
+                officialPortalUrl: report.officialPortalUrl || 'https://eservices.tnpolice.gov.in/',
+                applicableLegalProvisions: ['Verified Statutory Provisions under Indian Law'],
+              });
+              setIsDraftModalOpen(true);
+            }}
+            onOpenAuth={() => {
+              setAuthInitialMode('auth');
+              setIsAuthOpen(true);
+            }}
+          />
+        )}
+
         {activeScreen === 'settings' && (
           <SettingsScreen
             theme={theme}
@@ -623,6 +742,7 @@ export default function App() {
         <BottomNav
           activeScreen={activeScreen}
           onSelectScreen={(s) => setActiveScreen(s)}
+          language={language}
         />
       )}
 
@@ -640,6 +760,20 @@ export default function App() {
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
       />
+
+      {/* AI-Assisted Complaint Draft Modal */}
+      {activeDraftData && activeReportData && (
+        <ComplaintDraftModal
+          isOpen={isDraftModalOpen}
+          onClose={() => setIsDraftModalOpen(false)}
+          draftData={activeDraftData}
+          reportData={activeReportData}
+          language={language}
+          onReportUpdated={(updated) => {
+            setActiveReportData(updated);
+          }}
+        />
+      )}
 
       {/* Full Modern Welcome & Authentication and Onboarding Flow */}
       {isAuthOpen && (

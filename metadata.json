@@ -1,6 +1,6 @@
 {
   "name": "SafeRoute AI",
-  "description": "Human-centric intelligent route planning with accessibility, safety, and mobility barrier awareness. Routes that understand you.",
+  "description": "SafeRoute AI — Accessible Navigation, Legal Rights & Safety Assistant. Understand your rights, find nearby help, report incidents, and navigate with barrier awareness.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

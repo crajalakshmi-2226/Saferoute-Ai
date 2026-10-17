@@ -69,6 +69,104 @@
         }
       },
       "required": ["uid", "fullName", "email"]
+    },
+    "IncidentReport": {
+      "title": "IncidentReport",
+      "description": "User confidential incident report and AI generated legal complaint draft",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique report ID",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "category": {
+          "type": "string",
+          "description": "Incident category",
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "description": "User described facts of the incident",
+          "maxLength": 5000
+        },
+        "incidentDate": {
+          "type": "string",
+          "description": "Date and time of the incident",
+          "maxLength": 50
+        },
+        "location": {
+          "type": "string",
+          "description": "Location description or address",
+          "maxLength": 300
+        },
+        "latitude": {
+          "type": "number",
+          "description": "GPS latitude if shared with consent"
+        },
+        "longitude": {
+          "type": "number",
+          "description": "GPS longitude if shared with consent"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["en", "ta"],
+          "description": "Preferred language for communication and draft"
+        },
+        "desiredAssistance": {
+          "type": "string",
+          "description": "Action or assistance sought by user",
+          "maxLength": 300
+        },
+        "evidenceFiles": {
+          "type": "array",
+          "description": "Metadata of attached evidence files (images/videos/docs)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "sizeBytes": { "type": "number" },
+              "uploadedAt": { "type": "string" }
+            }
+          }
+        },
+        "complaintDraft": {
+          "type": "string",
+          "description": "Structured legal complaint draft text",
+          "maxLength": 10000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft_created", "ready_for_review", "opened_official_channel", "submitted_confirmed"],
+          "description": "Current status of the complaint"
+        },
+        "receivingAuthority": {
+          "type": "string",
+          "description": "Relevant official authority name and department",
+          "maxLength": 200
+        },
+        "officialPortalUrl": {
+          "type": "string",
+          "description": "Official verification/reporting portal URL",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp in ISO format"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated timestamp in ISO format"
+        }
+      },
+      "required": ["id", "userId", "category", "description", "status"]
     }
   },
   "firestore": {
@@ -77,6 +175,12 @@
         "$ref": "#/entities/UserProfile"
       },
       "description": "Private user profile documents, accessible only by the authenticated owner"
+    },
+    "/users/{userId}/reports/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/IncidentReport"
+      },
+      "description": "Confidential incident reports and complaint drafts, strictly private to the authenticated owner"
     }
   }
 }

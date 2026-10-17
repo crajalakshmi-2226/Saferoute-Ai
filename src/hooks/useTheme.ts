@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { ThemeMode } from '../types';
+import { safeStorage } from '../utils/storage';
 
 export function useTheme() {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') return 'dark';
-    const saved = localStorage.getItem('saferoute_theme') as ThemeMode | null;
+    const saved = safeStorage.getItem('saferoute_theme') as ThemeMode | null;
     return saved || 'dark';
   });
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
     const applyTheme = () => {
-      const isDark = theme === 'dark' || (theme === 'system' && mediaQuery.matches);
+      const isDark = theme === 'dark' || (theme === 'system' && (mediaQuery?.matches ?? true));
       if (isDark) {
         root.classList.add('dark');
       } else {
@@ -22,16 +24,18 @@ export function useTheme() {
     };
 
     applyTheme();
-    localStorage.setItem('saferoute_theme', theme);
+    safeStorage.setItem('saferoute_theme', theme);
 
-    const listener = () => {
-      if (theme === 'system') {
-        applyTheme();
-      }
-    };
+    if (mediaQuery) {
+      const listener = () => {
+        if (theme === 'system') {
+          applyTheme();
+        }
+      };
 
-    mediaQuery.addEventListener('change', listener);
-    return () => mediaQuery.removeEventListener('change', listener);
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
   }, [theme]);
 
   return { theme, setTheme };

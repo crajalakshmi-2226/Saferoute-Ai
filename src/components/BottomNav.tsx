@@ -2,33 +2,56 @@ import React from 'react';
 import {
   Home,
   Navigation,
-  AlertTriangle,
-  Camera,
-  Layers,
-  Settings,
-  Flame,
-  Bookmark,
-  Users
+  Scale,
+  FileText,
+  ShieldAlert,
+  Settings
 } from 'lucide-react';
+import { Language } from '../utils/translations';
 
 interface Props {
   activeScreen: string;
   onSelectScreen: (screenId: string) => void;
+  language: Language;
 }
 
-export const BottomNav: React.FC<Props> = ({ activeScreen, onSelectScreen }) => {
+export const BottomNav: React.FC<Props> = ({ activeScreen, onSelectScreen, language }) => {
   const tabs = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'search', label: 'Routes', icon: Navigation },
-    { id: 'barriers', label: 'Barriers', icon: AlertTriangle },
-    { id: 'vision', label: 'AI Vision', icon: Camera },
-    { id: 'heatmap', label: 'Heatmap', icon: Flame },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    {
+      id: 'home',
+      label: language === 'ta' ? 'முகப்பு' : 'Home',
+      icon: Home
+    },
+    {
+      id: 'search',
+      label: language === 'ta' ? 'வழிகள்' : 'Routes',
+      icon: Navigation
+    },
+    {
+      id: 'legal_assist',
+      label: language === 'ta' ? 'சட்ட உதவி' : 'Legal Help',
+      icon: Scale
+    },
+    {
+      id: 'report_incident',
+      label: language === 'ta' ? 'புகார்' : 'Report',
+      icon: FileText
+    },
+    {
+      id: 'nearby_help',
+      label: language === 'ta' ? 'உதவி மையம்' : 'Nearby',
+      icon: ShieldAlert
+    },
+    {
+      id: 'settings',
+      label: language === 'ta' ? 'அமைப்புகள்' : 'Settings',
+      icon: Settings
+    },
   ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800 bg-slate-950/90 backdrop-blur-lg">
-      <div className="mx-auto flex max-w-lg items-center justify-around py-2 px-2">
+      <div className="mx-auto flex max-w-lg items-center justify-around py-2 px-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeScreen === tab.id;
@@ -36,7 +59,7 @@ export const BottomNav: React.FC<Props> = ({ activeScreen, onSelectScreen }) => 
             <button
               key={tab.id}
               onClick={() => onSelectScreen(tab.id)}
-              className={`flex flex-col items-center gap-1 rounded-xl py-1 px-2.5 transition cursor-pointer ${
+              className={`flex flex-col items-center gap-1 rounded-xl py-1 px-2 transition cursor-pointer ${
                 isActive
                   ? 'text-blue-400 font-bold'
                   : 'text-slate-400 hover:text-slate-200'

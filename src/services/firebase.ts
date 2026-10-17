@@ -16,6 +16,10 @@ import {
   doc,
   getDoc,
   setDoc,
+  getDocs,
+  collection,
+  deleteDoc,
+  updateDoc,
   getDocFromServer,
 } from 'firebase/firestore';
 
@@ -153,6 +157,117 @@ export async function saveUserProfile(data: UserProfileData): Promise<void> {
     await setDoc(userDocRef, payload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// Confidential Incident Report Model in Firestore
+export interface EvidenceFileItem {
+  id: string;
+  name: string;
+  type: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  previewUrl?: string;
+}
+
+export interface IncidentReportData {
+  id: string;
+  userId: string;
+  category: string;
+  description: string;
+  incidentDate?: string;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  preferredLanguage?: 'en' | 'ta';
+  desiredAssistance?: string;
+  complaintDraft?: string;
+  status: 'draft_created' | 'ready_for_review' | 'opened_official_channel' | 'submitted_confirmed';
+  receivingAuthority?: string;
+  officialPortalUrl?: string;
+  evidenceFiles?: EvidenceFileItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Save or create an incident report in Firestore under users/{userId}/reports/{reportId}
+export async function saveIncidentReport(report: IncidentReportData): Promise<string> {
+  const reportId = report.id || `rep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const path = `users/${report.userId}/reports/${reportId}`;
+  try {
+    const reportDocRef = doc(db, 'users', report.userId, 'reports', reportId);
+    const cleanPayload: IncidentReportData = {
+      ...report,
+      id: reportId,
+      createdAt: report.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    // Strip large local blob preview URLs before persisting to Firestore
+    if (cleanPayload.evidenceFiles) {
+      cleanPayload.evidenceFiles = cleanPayload.evidenceFiles.map((file) => ({
+        id: file.id,
+        name: file.name,
+        type: file.type,
+        sizeBytes: file.sizeBytes,
+        uploadedAt: file.uploadedAt,
+      }));
+    }
+    await setDoc(reportDocRef, cleanPayload, { merge: true });
+    return reportId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return reportId;
+  }
+}
+
+// Fetch all confidential incident reports for the authenticated user
+export async function getUserIncidentReports(userId: string): Promise<IncidentReportData[]> {
+  const path = `users/${userId}/reports`;
+  try {
+    const reportsCollRef = collection(db, 'users', userId, 'reports');
+    const snapshot = await getDocs(reportsCollRef);
+    const reports: IncidentReportData[] = [];
+    snapshot.forEach((docSnap) => {
+      reports.push(docSnap.data() as IncidentReportData);
+    });
+    // Sort descending by creation date
+    return reports.sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
+}
+
+// Delete an incident report
+export async function deleteIncidentReport(userId: string, reportId: string): Promise<void> {
+  const path = `users/${userId}/reports/${reportId}`;
+  try {
+    const reportDocRef = doc(db, 'users', userId, 'reports', reportId);
+    await deleteDoc(reportDocRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Update report status
+export async function updateIncidentReportStatus(
+  userId: string,
+  reportId: string,
+  status: IncidentReportData['status']
+): Promise<void> {
+  const path = `users/${userId}/reports/${reportId}`;
+  try {
+    const reportDocRef = doc(db, 'users', userId, 'reports', reportId);
+    await updateDoc(reportDocRef, {
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

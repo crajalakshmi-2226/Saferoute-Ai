@@ -8,6 +8,7 @@ import {
   ArrowRight,
   X
 } from 'lucide-react';
+import { safeStorage } from '../../utils/storage';
 
 interface Props {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export const WelcomeOnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => 
     if (step < steps.length - 1) {
       setStep((prev) => prev + 1);
     } else {
-      localStorage.setItem('saferoute_onboarding_seen', 'true');
+      safeStorage.setItem('saferoute_onboarding_seen', 'true');
       onClose();
     }
   };
@@ -63,7 +64,7 @@ export const WelcomeOnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => 
         {/* Close Button */}
         <button
           onClick={() => {
-            localStorage.setItem('saferoute_onboarding_seen', 'true');
+            safeStorage.setItem('saferoute_onboarding_seen', 'true');
             onClose();
           }}
           className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-xl bg-slate-800/60"
@@ -106,7 +107,7 @@ export const WelcomeOnboardingModal: React.FC<Props> = ({ isOpen, onClose }) => 
         <div className="mt-8 flex items-center justify-between pt-4 border-t border-slate-800">
           <button
             onClick={() => {
-              localStorage.setItem('saferoute_onboarding_seen', 'true');
+              safeStorage.setItem('saferoute_onboarding_seen', 'true');
               onClose();
             }}
             className="text-xs font-semibold text-slate-400 hover:text-white transition"
