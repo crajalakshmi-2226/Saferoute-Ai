@@ -7,11 +7,11 @@ import {
   VERIFIED_LEGAL_DATABASE,
   OFFICIAL_LEGAL_SOURCES,
   findMatchingLegalProvision,
-} from './src/data/legalKnowledgeBase';
+} from './src/data/legalKnowledgeBase.ts';
 import {
   VERIFIED_HELP_PLACES,
   getDistanceMeters,
-} from './src/data/nearbyHelpData';
+} from './src/data/nearbyHelpData.ts';
 
 dotenv.config();
 
