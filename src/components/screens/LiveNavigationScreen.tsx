@@ -15,8 +15,18 @@ import {
   Footprints,
   Clock,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Zap,
+  Battery,
+  Eye,
+  Sun
 } from 'lucide-react';
+import {
+  getBatterySaverSettings,
+  saveBatterySaverSettings,
+  subscribeToBatterySaver,
+  BatterySaverSettings
+} from '../../services/batterySaverService';
 
 interface Props {
   route: RouteAlternative;
@@ -46,6 +56,49 @@ export const LiveNavigationScreen: React.FC<Props> = ({
   const [isRerouting, setIsRerouting] = useState(false);
   const [activeRoute, setActiveRoute] = useState<RouteAlternative>(route);
   const [simulatedDeviation, setSimulatedDeviation] = useState(false);
+
+  // Battery saver state & screen dimming
+  const [batterySaver, setBatterySaver] = useState<BatterySaverSettings>(getBatterySaverSettings);
+  const [isAwakeTemporarily, setIsAwakeTemporarily] = useState(false);
+  const [awakeRemaining, setAwakeRemaining] = useState(0);
+
+  useEffect(() => {
+    return subscribeToBatterySaver((updated) => {
+      setBatterySaver(updated);
+    });
+  }, []);
+
+  // Temporary wake-up when user taps dimmed screen
+  const handleWakeScreen = () => {
+    if (!batterySaver.enabled || !batterySaver.dimScreen) return;
+    setIsAwakeTemporarily(true);
+    setAwakeRemaining(8);
+  };
+
+  useEffect(() => {
+    if (!isAwakeTemporarily || awakeRemaining <= 0) {
+      if (awakeRemaining === 0) setIsAwakeTemporarily(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setAwakeRemaining((prev) => {
+        if (prev <= 1) {
+          setIsAwakeTemporarily(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isAwakeTemporarily, awakeRemaining]);
+
+  const toggleBatterySaver = () => {
+    const updated = { ...batterySaver, enabled: !batterySaver.enabled };
+    setBatterySaver(updated);
+    saveBatterySaverSettings(updated);
+  };
 
   const steps = activeRoute.steps;
   const currentStep: RouteStep | undefined = steps[currentStepIndex] || steps[0];
@@ -109,6 +162,22 @@ export const LiveNavigationScreen: React.FC<Props> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={toggleBatterySaver}
+              className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                batterySaver.enabled
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm'
+                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+              }`}
+              title={
+                batterySaver.enabled
+                  ? `Battery Saver Active (${batterySaver.dimScreen ? `Dimmed ${batterySaver.dimLevel}%` : 'Eco Mode'}) - Tap to toggle`
+                  : 'Enable Battery Saver (Dims screen & reduces refresh rate)'
+              }
+            >
+              <Zap className="w-4 h-4" />
+            </button>
+
             <button
               onClick={toggleMute}
               className={`p-2.5 rounded-xl border transition ${
@@ -191,6 +260,29 @@ export const LiveNavigationScreen: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* Battery Saver Status Notice */}
+        {batterySaver.enabled && (
+          <div className="mt-3 p-2.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between gap-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                <strong>Battery Saver Active:</strong> {batterySaver.reduceFrameRate ? 'Low-GPU 2D Map' : ''}
+                {batterySaver.dimScreen ? ` · Screen Dimmed (${batterySaver.dimLevel}%)` : ''}
+              </span>
+            </div>
+            {batterySaver.dimScreen && (
+              <button
+                type="button"
+                onClick={handleWakeScreen}
+                className="px-2.5 py-1 rounded-xl bg-emerald-900/70 hover:bg-emerald-800 text-emerald-200 text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition"
+              >
+                <Sun className="w-3.5 h-3.5" />
+                <span>{isAwakeTemporarily ? `Awake (${awakeRemaining}s)` : 'Brighten'}</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Rerouting feedback notice */}
         {simulatedDeviation && (
           <div className="mt-3 p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
@@ -208,8 +300,23 @@ export const LiveNavigationScreen: React.FC<Props> = ({
         selectedRouteIndex={0}
         barriers={knownBarriers}
         onOpenTokenSetup={onOpenTokenSetup}
+        batterySaver={batterySaver.enabled && batterySaver.reduceFrameRate}
         className="h-[420px] w-full"
       />
+
+      {/* Screen Dimming Overlay during Navigation */}
+      {batterySaver.enabled && batterySaver.dimScreen && !isAwakeTemporarily && (
+        <div
+          onClick={handleWakeScreen}
+          className="fixed inset-0 z-30 cursor-pointer transition-opacity duration-300 flex flex-col justify-end p-6"
+          style={{ backgroundColor: `rgba(0, 0, 0, ${batterySaver.dimLevel / 100})` }}
+        >
+          <div className="mx-auto bg-slate-900/95 border border-emerald-500/50 text-emerald-300 px-4 py-2 rounded-2xl text-xs font-bold backdrop-blur-md shadow-2xl flex items-center gap-2 pointer-events-none mb-16 animate-pulse">
+            <Zap className="w-4 h-4 text-emerald-400" />
+            <span>Screen Dimmed to Save Battery · Tap anywhere to brighten</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

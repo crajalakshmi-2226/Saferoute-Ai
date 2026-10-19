@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { RouteAlternative, Coordinates, BarrierReport } from '../types';
 import { getMapboxToken } from '../services/mapboxService';
-import { AlertCircle, Key, Locate, Layers, ShieldAlert, HardDrive, WifiOff } from 'lucide-react';
+import { AlertCircle, Key, Locate, Layers, ShieldAlert, HardDrive, WifiOff, Zap } from 'lucide-react';
 import { isCoordinateCoveredByOfflineMap, isOfflineSimulated } from '../services/offlineMapService';
 import { OfflineMapPack } from '../types';
 
@@ -16,6 +16,7 @@ interface Props {
   onOpenTokenSetup: () => void;
   className?: string;
   theme?: 'light' | 'dark' | 'system';
+  batterySaver?: boolean;
 }
 
 export const MapboxMap: React.FC<Props> = ({
@@ -28,6 +29,7 @@ export const MapboxMap: React.FC<Props> = ({
   onOpenTokenSetup,
   className = 'h-[400px] w-full',
   theme = 'dark',
+  batterySaver = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -64,7 +66,8 @@ export const MapboxMap: React.FC<Props> = ({
       style: styleUri,
       center: defaultCenter,
       zoom: 14,
-      pitch: 30,
+      pitch: batterySaver ? 0 : 30,
+      fadeDuration: batterySaver ? 0 : 300,
       attributionControl: true,
     });
 
@@ -275,6 +278,18 @@ export const MapboxMap: React.FC<Props> = ({
     };
   }, [currentLocation, routes]);
 
+  // Dynamically ease pitch to flat 0 in battery saver mode to reduce WebGL rendering
+  useEffect(() => {
+    if (mapRef.current && isMapLoaded) {
+      try {
+        mapRef.current.easeTo({
+          pitch: batterySaver ? 0 : 30,
+          duration: 350,
+        });
+      } catch {}
+    }
+  }, [batterySaver, isMapLoaded]);
+
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 ${className}`}>
       {/* Mapbox Canvas */}
@@ -315,6 +330,14 @@ export const MapboxMap: React.FC<Props> = ({
           <span className="text-slate-400 font-mono">
             {routes[selectedRouteIndex].distanceMeters}m · {routes[selectedRouteIndex].durationMinutes} min
           </span>
+        </div>
+      )}
+
+      {/* Battery Saver Eco Mode Badge */}
+      {batterySaver && (
+        <div className="absolute top-3 right-14 z-10 rounded-xl bg-emerald-950/90 border border-emerald-500/40 px-2.5 py-1 backdrop-blur-md shadow-lg flex items-center gap-1.5 text-[11px] text-emerald-300">
+          <Zap className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="font-semibold">Eco 2D Mode</span>
         </div>
       )}
 

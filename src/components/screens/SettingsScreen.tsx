@@ -4,6 +4,7 @@ import { getMapboxToken } from '../../services/mapboxService';
 import { DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
 import { UserProfileData, isFirebaseConfigured, auth } from '../../services/firebase';
 import { OfflineMapsSection } from '../OfflineMapsSection';
+import { BatterySaverSection } from '../BatterySaverSection';
 import {
   Settings,
   Key,
@@ -392,7 +393,10 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 2b. Download Offline Maps */}
+      {/* 2b. Battery Saver Mode */}
+      <BatterySaverSection />
+
+      {/* 2c. Download Offline Maps */}
       <OfflineMapsSection
         currentLocation={currentLocation}
         onUseCurrentLocation={onUseCurrentLocation}
