@@ -733,6 +733,9 @@ export default function App() {
               setAuthInitialMode('onboarding');
               setIsAuthOpen(true);
             }}
+            currentLocation={currentLocation}
+            onUseCurrentLocation={handleUseCurrentLocation}
+            isLocating={isLocating}
           />
         )}
       </main>

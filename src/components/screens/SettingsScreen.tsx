@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ThemeMode, ScoringWeights } from '../../types';
+import { ThemeMode, ScoringWeights, Coordinates } from '../../types';
 import { getMapboxToken } from '../../services/mapboxService';
 import { DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
 import { UserProfileData, isFirebaseConfigured, auth } from '../../services/firebase';
+import { OfflineMapsSection } from '../OfflineMapsSection';
 import {
   Settings,
   Key,
@@ -44,6 +45,9 @@ interface Props {
   onOpenAuth: () => void;
   onSignOut: () => void;
   onOpenOnboarding: () => void;
+  currentLocation?: Coordinates;
+  onUseCurrentLocation?: () => void;
+  isLocating?: boolean;
 }
 
 export const SettingsScreen: React.FC<Props> = ({
@@ -58,6 +62,9 @@ export const SettingsScreen: React.FC<Props> = ({
   onOpenAuth,
   onSignOut,
   onOpenOnboarding,
+  currentLocation,
+  onUseCurrentLocation,
+  isLocating,
 }) => {
   const [hasMapboxToken, setHasMapboxToken] = useState(false);
   const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
@@ -384,6 +391,13 @@ export const SettingsScreen: React.FC<Props> = ({
           </a>
         </div>
       </div>
+
+      {/* 2b. Download Offline Maps */}
+      <OfflineMapsSection
+        currentLocation={currentLocation}
+        onUseCurrentLocation={onUseCurrentLocation}
+        isLocating={isLocating}
+      />
 
       {/* 3. Gemini AI Multimodal Barrier Scanner */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">

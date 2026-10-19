@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { RouteAlternative, Coordinates, BarrierReport } from '../types';
 import { getMapboxToken } from '../services/mapboxService';
-import { AlertCircle, Key, Locate, Layers, ShieldAlert } from 'lucide-react';
+import { AlertCircle, Key, Locate, Layers, ShieldAlert, HardDrive, WifiOff } from 'lucide-react';
+import { isCoordinateCoveredByOfflineMap, isOfflineSimulated } from '../services/offlineMapService';
+import { OfflineMapPack } from '../types';
 
 interface Props {
   currentLocation?: Coordinates;
@@ -32,6 +34,8 @@ export const MapboxMap: React.FC<Props> = ({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [activeOfflinePack, setActiveOfflinePack] = useState<OfflineMapPack | null>(null);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const token = getMapboxToken();
 
@@ -241,6 +245,36 @@ export const MapboxMap: React.FC<Props> = ({
     }
   };
 
+  // Listen to network status and offline coverage
+  useEffect(() => {
+    const updateOfflineState = () => {
+      const simulated = isOfflineSimulated();
+      const offline = !navigator.onLine || simulated;
+      setIsOfflineMode(offline);
+
+      const targetCoord = currentLocation || (routes[0]?.geometry?.coordinates[0] ? {
+        lng: routes[0].geometry.coordinates[0][0],
+        lat: routes[0].geometry.coordinates[0][1],
+      } : undefined);
+
+      if (targetCoord) {
+        const coverage = isCoordinateCoveredByOfflineMap(targetCoord);
+        setActiveOfflinePack(coverage.isCovered && coverage.pack ? coverage.pack : null);
+      }
+    };
+
+    updateOfflineState();
+    window.addEventListener('online', updateOfflineState);
+    window.addEventListener('offline', updateOfflineState);
+    window.addEventListener('saferoute:offline-simulation-changed', updateOfflineState);
+
+    return () => {
+      window.removeEventListener('online', updateOfflineState);
+      window.removeEventListener('offline', updateOfflineState);
+      window.removeEventListener('saferoute:offline-simulation-changed', updateOfflineState);
+    };
+  }, [currentLocation, routes]);
+
   return (
     <div className={`relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 ${className}`}>
       {/* Mapbox Canvas */}
@@ -255,6 +289,22 @@ export const MapboxMap: React.FC<Props> = ({
         >
           <Locate className="h-5 w-5 text-blue-400" />
         </button>
+      )}
+
+      {/* Floating Offline Map Badge */}
+      {(activeOfflinePack || isOfflineMode) && (
+        <div className="absolute bottom-4 left-4 z-10 rounded-xl bg-slate-900/95 border border-cyan-500/40 px-3 py-1.5 backdrop-blur-md shadow-lg flex items-center gap-2 text-[11px]">
+          {isOfflineMode ? (
+            <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          ) : (
+            <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          )}
+          <span className="text-slate-200 font-medium">
+            {activeOfflinePack
+              ? `Offline Ready (${activeOfflinePack.cityName})`
+              : 'Offline Map Cache Active'}
+          </span>
+        </div>
       )}
 
       {/* Active Route Floating Badge */}

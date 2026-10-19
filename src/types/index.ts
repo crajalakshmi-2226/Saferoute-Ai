@@ -154,3 +154,34 @@ export interface JourneyHistoryItem {
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+
+export interface OfflineMapPack {
+  id: string;
+  cityName: string;
+  countryOrState?: string;
+  center: Coordinates;
+  radiusKm: number;
+  tileCount: number;
+  sizeBytes: number;
+  downloadedAt: string;
+  zoomLevels: number[];
+  status: 'ready' | 'downloading' | 'failed';
+  bounds: {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  };
+}
+
+export interface DownloadProgress {
+  packId: string;
+  cityName: string;
+  totalTiles: number;
+  completedTiles: number;
+  percent: number;
+  currentStage: string;
+  bytesDownloaded: number;
+  isComplete: boolean;
+  error?: string;
+}
