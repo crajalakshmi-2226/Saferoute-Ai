@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { searchPlaces, fetchWalkingRoutes } from '../../services/mapboxService';
 import { evaluateRoute, DEFAULT_SCORING_WEIGHTS } from '../../services/scoringService';
+import { POPULAR_LOCATION_PRESETS } from '../../services/locationService';
 import { MapboxMap } from '../MapboxMap';
 import {
   Search,
@@ -252,6 +253,30 @@ export const SearchRouteScreen: React.FC<Props> = ({
               ))}
             </div>
           )}
+
+          {/* Quick Origin Location Pickers */}
+          <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+            <span className="text-slate-400 shrink-0 font-medium">Quick Pick:</span>
+            {POPULAR_LOCATION_PRESETS.slice(0, 5).map((preset) => (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => {
+                  setOriginMode('manual');
+                  setOriginQuery(preset.name);
+                  setOriginCoords(preset.coords);
+                  setOriginSuggestions([]);
+                }}
+                className={`px-2 py-0.5 rounded-lg border shrink-0 transition ${
+                  originCoords && Math.abs(originCoords.lat - preset.coords.lat) < 0.005
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-bold'
+                    : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-700'
+                }`}
+              >
+                📍 {preset.name.split(',')[0]}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 2. Destination Input */}

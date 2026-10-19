@@ -243,6 +243,18 @@ export default function App() {
           console.warn('Profile fetch notice:', err);
         }
       } else {
+        // Check if demo user was logged in
+        const demoSaved = safeStorage.getItem('saferoute_demo_profile');
+        if (demoSaved) {
+          try {
+            const parsed = JSON.parse(demoSaved);
+            if (parsed && parsed.uid) {
+              setUserProfile(parsed);
+              setIsGuest(false);
+              return;
+            }
+          } catch {}
+        }
         // Not signed in: if not marked guest, show Welcome & Auth screen
         const guestFlag = safeStorage.getItem('saferoute_is_guest');
         if (!guestFlag) {
@@ -410,6 +422,7 @@ export default function App() {
     setUserProfile(null);
     setIsGuest(false);
     safeStorage.removeItem('saferoute_is_guest');
+    safeStorage.removeItem('saferoute_demo_profile');
     setIsAuthOpen(true);
     setAuthInitialMode('auth');
     setActiveScreen('home');

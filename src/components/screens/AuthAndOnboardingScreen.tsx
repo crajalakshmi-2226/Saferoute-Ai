@@ -149,9 +149,44 @@ export const AuthAndOnboardingScreen: React.FC<Props> = ({
         setErrorMessage('Google sign-in popup was closed before completion.');
       } else if (err.code === 'auth/cancelled-popup-request') {
         setErrorMessage('Sign-in was cancelled.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setErrorMessage(
+          'This domain is not yet in Firebase Authorized Domains. In Firebase Console > Authentication > Settings > Authorized domains, add your URL. Or click "One-Tap Instant Sign In" below!'
+        );
+      } else if (err.code === 'auth/popup-blocked') {
+        setErrorMessage(
+          'Your mobile browser blocked the Google login popup. Please allow popups or use "One-Tap Instant Sign In" below.'
+        );
       } else {
-        setErrorMessage(err.message || 'Unable to sign in with Google. Please check your credentials.');
+        setErrorMessage(err.message || 'Unable to sign in with Google. You can use "One-Tap Instant Sign In" below.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // One-Tap Instant Sign In (No password or popup required)
+  const handleDemoSignIn = () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const demoProfile: UserProfileData = {
+        uid: `demo_user_${Date.now()}`,
+        fullName: fullName.trim() || 'SafeRoute Member',
+        email: email.trim() || 'member@saferoute.local',
+        currentLocationName: 'Chennai Central, TN',
+        currentLocationLat: 13.0827,
+        currentLocationLng: 80.2707,
+        mobilityProfile: 'general',
+        onboardingCompleted: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      safeStorage.setItem('saferoute_demo_profile', JSON.stringify(demoProfile));
+      safeStorage.removeItem('saferoute_is_guest');
+      onAuthSuccess(demoProfile);
+    } catch {
+      setErrorMessage('Could not initialize instant login.');
     } finally {
       setLoading(false);
     }
@@ -180,11 +215,13 @@ export const AuthAndOnboardingScreen: React.FC<Props> = ({
       }
     } catch (err: any) {
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        setErrorMessage('Invalid email or password. Please verify and try again.');
+        setErrorMessage('Invalid email or password. If you haven\'t created an account yet, click the "Create Account" tab above!');
       } else if (err.code === 'auth/user-not-found') {
-        setErrorMessage('No user account found with this email. Click "Create Account" above.');
+        setErrorMessage('No user account found with this email. Click "Create Account" tab above to register first.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setErrorMessage('Email login is not enabled in Firebase Console. You can use "One-Tap Instant Sign In" below!');
       } else {
-        setErrorMessage(err.message || 'Failed to sign in. Please verify your credentials.');
+        setErrorMessage(err.message || 'Failed to sign in. If you do not have an account yet, click "Create Account" tab above.');
       }
     } finally {
       setLoading(false);
@@ -441,10 +478,22 @@ export const AuthAndOnboardingScreen: React.FC<Props> = ({
                 <span>Continue with Google</span>
               </button>
 
+              {/* One-Tap Instant Sign In (No passwords or popups required) */}
+              <button
+                type="button"
+                onClick={handleDemoSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition active:scale-[0.99] cursor-pointer"
+                title="Instant access without waiting for passwords or email verification"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-200" />
+                <span>One-Tap Instant Sign In (No Password Needed)</span>
+              </button>
+
               <div className="relative flex items-center justify-center my-3">
                 <div className="border-t border-slate-800 w-full" />
                 <span className="bg-slate-900 px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                  or continue with email
+                  or sign in with email
                 </span>
               </div>
             </div>
