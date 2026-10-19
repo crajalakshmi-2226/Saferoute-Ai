@@ -33,7 +33,7 @@ import {
 
 interface Props {
   currentLocation?: Coordinates;
-  onUseCurrentLocation: () => Promise<void>;
+  onUseCurrentLocation: () => Promise<Coordinates | undefined>;
   isLocating: boolean;
   activeProfile: MobilityProfile;
   activePreferences: MobilityPreferences;
@@ -219,18 +219,22 @@ export const SearchRouteScreen: React.FC<Props> = ({
             <button
               onClick={async () => {
                 setOriginMode('current_location');
-                await onUseCurrentLocation();
+                const coords = await onUseCurrentLocation();
+                if (coords) {
+                  setOriginCoords(coords);
+                  setOriginQuery('My Current Location');
+                }
               }}
               disabled={isLocating}
               className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition ${
-                originMode === 'current_location' && currentLocation
-                  ? 'bg-blue-600 text-white border-blue-500'
+                originMode === 'current_location' && (originCoords || currentLocation)
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-md'
                   : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
               title="Use current real device location"
             >
-              <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">GPS</span>
+              <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
+              <span className="font-bold">{isLocating ? 'Locating...' : 'My Location (GPS)'}</span>
             </button>
           </div>
 

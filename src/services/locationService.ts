@@ -6,8 +6,6 @@ export type GeolocationStatus =
   | 'prompting'
   | 'locating'
   | 'success'
-  | 'fallback_ip'
-  | 'fallback_cache'
   | 'permission_denied'
   | 'position_unavailable'
   | 'timeout'
@@ -50,11 +48,24 @@ export function getLastKnownLocation(): Coordinates | null {
   return null;
 }
 
+// Check browser permission status if supported
+export async function checkGeolocationPermission(): Promise<PermissionState | 'unsupported'> {
+  if (typeof navigator !== 'undefined' && 'permissions' in navigator && navigator.permissions.query) {
+    try {
+      const status = await navigator.permissions.query({ name: 'geolocation' });
+      return status.state;
+    } catch {
+      return 'unsupported';
+    }
+  }
+  return 'unsupported';
+}
+
 // Helper: Attempt browser position with specific options
 function getPositionPromise(options: PositionOptions): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !navigator.geolocation) {
-      return reject(new Error('Geolocation unsupported'));
+      return reject(new Error('Geolocation is not supported by your browser.'));
     }
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
@@ -66,7 +77,6 @@ async function fetchIpGeolocation(): Promise<{ coords: Coordinates; cityName?: s
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    // Free, HTTPS, CORS-enabled IP geolocation
     const res = await fetch('https://get.geojs.io/v1/ip/geo.json', {
       signal: controller.signal,
     });
@@ -84,7 +94,6 @@ async function fetchIpGeolocation(): Promise<{ coords: Coordinates; cityName?: s
       }
     }
   } catch {
-    // try fallback
     try {
       const res = await fetch('https://ipapi.co/json/');
       if (res.ok) {
@@ -105,61 +114,77 @@ async function fetchIpGeolocation(): Promise<{ coords: Coordinates; cityName?: s
 
 /**
  * Robust multi-tier location requester:
- * 1. High Accuracy GPS (6s timeout)
- * 2. Low Accuracy Wi-Fi / Cell tower (5s timeout)
+ * 1. Native High-Accuracy Device GPS (15s timeout to allow user to tap 'Allow' and GPS hardware to lock)
+ * 2. Low-Accuracy Network/Cell/Wi-Fi positioning (10s timeout)
  * 3. IP-based Geolocation fallback
  * 4. Last Cached Location fallback
- * 5. Tamil Nadu default (Chennai)
+ * 5. Tamil Nadu default (Chennai Central)
+ *
+ * Always returns coordinates so caller is NEVER stranded with an empty state!
  */
 export async function requestCurrentPosition(): Promise<LocationResult> {
-  // Step 1: High Accuracy GPS
-  try {
-    const pos = await getPositionPromise({
-      enableHighAccuracy: true,
-      timeout: 6000,
-      maximumAge: 15000,
-    });
-
-    const coords: Coordinates = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-    };
-    safeStorage.setItem(STORAGE_KEY, JSON.stringify(coords));
-
-    return {
-      status: 'success',
-      coordinates: coords,
-      accuracyMeters: pos.coords.accuracy,
-      source: 'gps',
-      timestamp: pos.timestamp,
-    };
-  } catch (gpsError: any) {
-    console.warn('[LocationService] High accuracy GPS failed, falling back to network:', gpsError?.message);
+  // Check permission state first if available
+  const permState = await checkGeolocationPermission();
+  let permissionNotice = '';
+  if (permState === 'denied') {
+    permissionNotice = 'Location access is blocked in your browser site settings. Tap the lock/tune icon in your address bar to enable high-accuracy GPS.';
   }
 
-  // Step 2: Low-accuracy fast network/cell tower positioning
-  try {
-    const pos = await getPositionPromise({
-      enableHighAccuracy: false,
-      timeout: 5000,
-      maximumAge: 60000,
-    });
+  // If permission is not blocked, attempt Native GPS
+  if (permState !== 'denied') {
+    // Step 1: High Accuracy Native GPS (15 seconds)
+    try {
+      const pos = await getPositionPromise({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 5000,
+      });
 
-    const coords: Coordinates = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-    };
-    safeStorage.setItem(STORAGE_KEY, JSON.stringify(coords));
+      const coords: Coordinates = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+      safeStorage.setItem(STORAGE_KEY, JSON.stringify(coords));
 
-    return {
-      status: 'success',
-      coordinates: coords,
-      accuracyMeters: pos.coords.accuracy,
-      source: 'network',
-      timestamp: pos.timestamp,
-    };
-  } catch (netError: any) {
-    console.warn('[LocationService] Low accuracy positioning failed:', netError?.message);
+      return {
+        status: 'success',
+        coordinates: coords,
+        accuracyMeters: pos.coords.accuracy,
+        source: 'gps',
+        timestamp: pos.timestamp,
+      };
+    } catch (gpsError: any) {
+      console.warn('[LocationService] High accuracy GPS failed or timed out:', gpsError?.message);
+      if (gpsError?.code === 1) {
+        // Permission denied by user during prompt
+        permissionNotice = 'Location access was not granted. Tap the lock icon in your address bar to allow location.';
+      }
+    }
+
+    // Step 2: Low-accuracy fast network/cell tower positioning (10 seconds)
+    try {
+      const pos = await getPositionPromise({
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000,
+      });
+
+      const coords: Coordinates = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+      safeStorage.setItem(STORAGE_KEY, JSON.stringify(coords));
+
+      return {
+        status: 'success',
+        coordinates: coords,
+        accuracyMeters: pos.coords.accuracy,
+        source: 'network',
+        timestamp: pos.timestamp,
+      };
+    } catch (netError: any) {
+      console.warn('[LocationService] Low accuracy positioning failed:', netError?.message);
+    }
   }
 
   // Step 3: Fast IP-based Geolocation fallback
@@ -168,11 +193,12 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
     if (ipResult) {
       safeStorage.setItem(STORAGE_KEY, JSON.stringify(ipResult.coords));
       return {
-        status: 'fallback_ip',
+        status: 'success',
         coordinates: ipResult.coords,
         cityName: ipResult.cityName,
         accuracyMeters: 5000,
         source: 'ip',
+        errorMessage: permissionNotice || 'Location estimated via network IP. Enable device GPS for precise walking guidance.',
         timestamp: Date.now(),
       };
     }
@@ -184,10 +210,11 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
   const cached = getLastKnownLocation();
   if (cached) {
     return {
-      status: 'fallback_cache',
+      status: 'success',
       coordinates: cached,
       source: 'cache',
       accuracyMeters: 10000,
+      errorMessage: permissionNotice || 'Using last known location while searching for GPS signal.',
       timestamp: Date.now(),
     };
   }
@@ -200,6 +227,7 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
     cityName: defaultPreset.name,
     source: 'preset',
     accuracyMeters: 15000,
+    errorMessage: permissionNotice || 'Defaulting to Chennai Central. Tap "Quick Pick" or enter your address manually.',
     timestamp: Date.now(),
   };
 }

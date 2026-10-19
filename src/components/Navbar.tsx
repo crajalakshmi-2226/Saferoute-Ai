@@ -114,30 +114,19 @@ export const Navbar: React.FC<Props> = ({
             </button>
           )}
 
-          {/* User Account / Guest Chip */}
-          {userProfile ? (
-            <button
-              onClick={onOpenSettings}
-              className="flex items-center gap-1.5 rounded-xl bg-slate-900 border border-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white hover:border-slate-700 transition cursor-pointer"
-              title={`Logged in as ${userProfile.fullName || userProfile.email || 'User'}`}
-            >
-              <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
-                {userProfile.fullName?.charAt(0) || userProfile.email?.charAt(0) || 'U'}
-              </div>
-              <span className="hidden lg:inline max-w-[100px] truncate">
-                {userProfile.fullName || (userProfile.email ? userProfile.email.split('@')[0] : 'User')}
-              </span>
-            </button>
-          ) : isGuest ? (
-            <button
-              onClick={onOpenAuth}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition cursor-pointer"
-              title="You are in Guest Mode. Click to sign in and save your profile."
-            >
-              <LogIn className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Sign In</span>
-            </button>
-          ) : null}
+          {/* User Mobility Profile Chip */}
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-900 border border-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:text-white hover:border-slate-700 transition cursor-pointer"
+            title="Profile & Mobility Settings"
+          >
+            <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
+              {userProfile?.fullName?.charAt(0) || 'U'}
+            </div>
+            <span className="hidden lg:inline max-w-[100px] truncate">
+              {userProfile?.fullName || 'Profile'}
+            </span>
+          </button>
 
           {/* Quick Emergency SOS button */}
           <button

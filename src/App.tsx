@@ -243,24 +243,8 @@ export default function App() {
           console.warn('Profile fetch notice:', err);
         }
       } else {
-        // Check if demo user was logged in
-        const demoSaved = safeStorage.getItem('saferoute_demo_profile');
-        if (demoSaved) {
-          try {
-            const parsed = JSON.parse(demoSaved);
-            if (parsed && parsed.uid) {
-              setUserProfile(parsed);
-              setIsGuest(false);
-              return;
-            }
-          } catch {}
-        }
-        // Not signed in: if not marked guest, show Welcome & Auth screen
-        const guestFlag = safeStorage.getItem('saferoute_is_guest');
-        if (!guestFlag) {
-          setIsAuthOpen(true);
-          setAuthInitialMode('auth');
-        }
+        // App is fully accessible with zero login barriers
+        setIsGuest(false);
       }
     });
 
@@ -286,13 +270,17 @@ export default function App() {
   }, []);
 
   // Handle GPS Current Location Request
-  const handleUseCurrentLocation = async () => {
+  const handleUseCurrentLocation = async (): Promise<Coordinates | undefined> => {
     setIsLocating(true);
     setLocationError(null);
     try {
       const result = await requestCurrentPosition();
-      if (result.status === 'success' && result.coordinates) {
+      if (result.coordinates) {
         setCurrentLocation(result.coordinates);
+        if (result.errorMessage && result.source !== 'gps') {
+          setLocationError(result.errorMessage);
+        }
+        return result.coordinates;
       } else {
         setLocationError(result.errorMessage || 'Unable to retrieve location.');
       }
@@ -301,6 +289,7 @@ export default function App() {
     } finally {
       setIsLocating(false);
     }
+    return undefined;
   };
 
   // Profile and Preferences Save

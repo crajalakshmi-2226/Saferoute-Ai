@@ -122,25 +122,15 @@ export const MyReportsScreen: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Guest Warning */}
-        {isGuest && (
-          <div className="mt-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>
-                {language === 'ta'
-                  ? 'நீங்கள் விருந்தினர் முறையில் உள்ளீர்கள். உங்கள் புகார்கள் இந்த உலாவியில் மட்டுமே சேமிக்கப்படும்.'
-                  : 'You are in Guest Mode. Reports are saved in this browser only. Sign in to sync across devices.'}
-              </span>
-            </div>
-            <button
-              onClick={onOpenAuth}
-              className="text-xs font-bold text-amber-400 hover:underline shrink-0 cursor-pointer"
-            >
-              Sign In
-            </button>
-          </div>
-        )}
+        {/* Private Local Storage Notice */}
+        <div className="mt-4 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs flex items-center gap-2">
+          <Lock className="w-4 h-4 text-blue-400 shrink-0" />
+          <span>
+            {language === 'ta'
+              ? 'உங்கள் புகார்கள் மற்றும் மனுக்கள் இந்த சாதனத்தில் தனிப்பட்ட முறையில் பாதுகாப்பாக சேமிக்கப்படுகின்றன.'
+              : 'Confidential complaints and drafts are securely stored locally on this device.'}
+          </span>
+        </div>
       </div>
 
       {/* Reports List */}

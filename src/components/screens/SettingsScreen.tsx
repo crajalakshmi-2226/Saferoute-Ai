@@ -134,81 +134,44 @@ export const SettingsScreen: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 0. Dedicated Account & Cloud Sync Section */}
+      {/* 0. Mobility Profile Configuration */}
       <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <User className="w-5 h-5 text-blue-400" />
-            <h2 className="text-sm font-bold text-white">User Account & Firebase Sync</h2>
+            <h2 className="text-sm font-bold text-white">Your Mobility Profile</h2>
           </div>
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
-              userProfile
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-            }`}
-          >
-            {userProfile ? 'Cloud Synced' : 'Guest Mode'}
+          <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+            Active & Ready
           </span>
         </div>
 
-        {userProfile ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-lg font-extrabold text-white shadow-md">
-                {userProfile.fullName?.charAt(0) || userProfile.email?.charAt(0) || 'U'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-white truncate">{userProfile.fullName}</h3>
-                  <span className="text-[10px] font-medium bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30">
-                    Verified
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 truncate">{userProfile.email}</p>
-                {userProfile.currentLocationName && (
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Locality: {userProfile.currentLocationName}
-                  </p>
-                )}
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-950/70 border border-slate-800">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-lg font-extrabold text-white shadow-md">
+              <Accessibility className="w-6 h-6 text-white" />
             </div>
-
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                onClick={onOpenOnboarding}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-bold border border-blue-500/30 transition cursor-pointer"
-              >
-                <Accessibility className="w-4 h-4 text-blue-400" />
-                <span>Reconfigure Mobility Profile</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-bold border border-rose-500/20 transition cursor-pointer"
-              >
-                <LogOut className="w-4 h-4 text-rose-400" />
-                <span>Sign Out</span>
-              </button>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-white truncate">
+                {userProfile?.fullName || 'SafeRoute Member'}
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Routes, step-free access, and walking preferences are saved on this device.
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-slate-300 leading-relaxed">
-              You are currently using SafeRoute AI in <strong>Guest Mode</strong>. Your custom preferences, saved bookmarks, and navigation history are stored locally in your browser.
-            </p>
+
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
-              onClick={onOpenAuth}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition cursor-pointer"
+              onClick={onOpenOnboarding}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition cursor-pointer"
             >
-              <LogIn className="w-4 h-4" />
-              <span>Sign In with Google or Email</span>
+              <Accessibility className="w-4 h-4" />
+              <span>Change Mobility Profile (Wheelchair, Walking, Vision)</span>
             </button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Quick Access to Architecture & Roadmap */}
