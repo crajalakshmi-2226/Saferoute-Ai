@@ -1,5 +1,6 @@
 import { GeocodingResult, RouteAlternative, RouteStep, BarrierReport } from '../types';
 import { safeStorage } from '../utils/storage';
+import { findCachedRoute, recordVisitedArea } from './indexedDbCache';
 
 const TOKEN_STORAGE_KEY = 'saferoute_mapbox_token';
 
@@ -113,6 +114,36 @@ export async function fetchWalkingRoutes(
   origin: [number, number], // [lng, lat]
   destination: [number, number] // [lng, lat]
 ): Promise<any[]> {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+
+  // 1. If currently offline, immediately check local IndexedDB cache
+  if (!isOnline) {
+    const cached = await findCachedRoute(
+      { lng: origin[0], lat: origin[1] },
+      { lng: destination[0], lat: destination[1] }
+    );
+    if (cached && cached.routes && cached.routes.length > 0) {
+      // Return cached routes converted to raw route geometry for scoring if needed
+      return cached.routes.map((r) => ({
+        distance: r.distanceMeters,
+        duration: r.durationMinutes * 60,
+        geometry: { coordinates: r.geometry.coordinates },
+        legs: [
+          {
+            steps: r.steps.map((s) => ({
+              distance: s.distanceMeters,
+              duration: s.durationSeconds,
+              name: s.name,
+              maneuver: s.maneuver,
+            })),
+          },
+        ],
+        _isOfflineCached: true,
+      }));
+    }
+    throw new Error('Device is offline and no matching route was found in IndexedDB local cache.');
+  }
+
   const token = getMapboxToken();
   if (!token) {
     throw new Error('Mapbox token required to calculate walking directions.');
@@ -121,16 +152,64 @@ export async function fetchWalkingRoutes(
   const coords = `${origin[0]},${origin[1]};${destination[0]},${destination[1]}`;
   const url = `https://api.mapbox.com/directions/v5/mapbox/walking/${coords}?geometries=geojson&steps=true&alternatives=true&overview=full&access_token=${token}`;
 
-  const res = await fetch(url);
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `Directions API returned HTTP ${res.status}`);
-  }
+  // Use AbortController timeout for poor cellular connectivity (6.5s)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
 
-  const data = await res.json();
-  if (!data.routes || data.routes.length === 0) {
-    throw new Error('No walking routes found between these locations.');
-  }
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
 
-  return data.routes;
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || `Directions API returned HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!data.routes || data.routes.length === 0) {
+      throw new Error('No walking routes found between these locations.');
+    }
+
+    // Auto-record visited area centers in IndexedDB in the background
+    recordVisitedArea('Route Origin', { lng: origin[0], lat: origin[1] }, 2.0).catch(() => {});
+    recordVisitedArea('Route Destination', { lng: destination[0], lat: destination[1] }, 2.0).catch(() => {});
+
+    return data.routes;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+
+    // Fallback to IndexedDB cache on timeout or network error (poor cellular connectivity)
+    try {
+      const cached = await findCachedRoute(
+        { lng: origin[0], lat: origin[1] },
+        { lng: destination[0], lat: destination[1] }
+      );
+      if (cached && cached.routes && cached.routes.length > 0) {
+        return cached.routes.map((r) => ({
+          distance: r.distanceMeters,
+          duration: r.durationMinutes * 60,
+          geometry: { coordinates: r.geometry.coordinates },
+          legs: [
+            {
+              steps: r.steps.map((s) => ({
+                distance: s.distanceMeters,
+                duration: s.durationSeconds,
+                name: s.name,
+                maneuver: s.maneuver,
+              })),
+            },
+          ],
+          _isOfflineCached: true,
+        }));
+      }
+    } catch {
+      // Ignore cache lookup error and propagate main error
+    }
+
+    if (err.name === 'AbortError') {
+      throw new Error('Poor cellular connectivity: Route calculation timed out. Try again or select an offline cached route.');
+    }
+    throw err;
+  }
 }
+

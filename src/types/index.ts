@@ -95,6 +95,11 @@ export interface RouteAlternative {
   rankingReasons: string[];
   dataConfidence: number; // e.g. 85%
   missingInformationNotes: string[];
+
+  // Offline caching metadata
+  isOfflineCached?: boolean;
+  cachedAt?: string;
+  offlineNotice?: string;
 }
 
 export interface BarrierReport {
@@ -184,4 +189,59 @@ export interface DownloadProgress {
   bytesDownloaded: number;
   isComplete: boolean;
   error?: string;
+}
+
+// ================= IndexedDB Local Caching Strategy Types =================
+
+export interface CachedVisitedArea {
+  id: string; // e.g. "area_chennai_central" or geo-hash
+  name: string;
+  center: Coordinates;
+  bounds: {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  };
+  radiusKm: number;
+  lastVisitedAt: string;
+  visitCount: number;
+  cachedTileCount: number;
+  hasOfflineTiles: boolean;
+  totalSizeEstimatedBytes: number;
+}
+
+export interface CachedRouteSummary {
+  id: string; // unique hash or key
+  originCoords: Coordinates;
+  destinationCoords: Coordinates;
+  originName: string;
+  destinationName: string;
+  routes: RouteAlternative[];
+  mobilityProfileId: string;
+  cachedAt: string;
+  lastUsedAt: string;
+  distanceMeters: number;
+  durationMinutes: number;
+  suitabilityScore: number;
+  isOfflineCached: boolean;
+}
+
+export interface CachedMapTileRecord {
+  key: string; // e.g. "14/11843/7504"
+  z: number;
+  x: number;
+  y: number;
+  blob: Blob;
+  contentType: string;
+  cachedAt: number;
+  areaId?: string;
+}
+
+export interface OfflineCacheStats {
+  visitedAreasCount: number;
+  cachedRoutesCount: number;
+  cachedTilesCount: number;
+  estimatedStorageBytes: number;
+  lastSyncTimestamp: number;
 }

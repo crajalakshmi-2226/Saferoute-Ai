@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import {
   NavigationMode,
   MobilityProfile,
@@ -19,27 +19,70 @@ import { TokenSetupModal } from './components/TokenSetupModal';
 import { WelcomeOnboardingModal } from './components/screens/WelcomeOnboardingModal';
 import { AuthAndOnboardingScreen } from './components/screens/AuthAndOnboardingScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
-import { SearchRouteScreen } from './components/screens/SearchRouteScreen';
-import { RouteDetailsScreen } from './components/screens/RouteDetailsScreen';
-import { LiveNavigationScreen } from './components/screens/LiveNavigationScreen';
-import { MobilityProfileScreen } from './components/screens/MobilityProfileScreen';
-import { BarrierIntelligenceScreen } from './components/screens/BarrierIntelligenceScreen';
-import { AIVisionScreen } from './components/screens/AIVisionScreen';
-import { AccessibilityHeatmapScreen } from './components/screens/AccessibilityHeatmapScreen';
-import { PlaceIntelligenceScreen } from './components/screens/PlaceIntelligenceScreen';
-import { MultiProfileSimulationScreen } from './components/screens/MultiProfileSimulationScreen';
-import { JourneySummaryScreen } from './components/screens/JourneySummaryScreen';
-import { SavedPlacesScreen } from './components/screens/SavedPlacesScreen';
-import { SettingsScreen } from './components/screens/SettingsScreen';
-import { PipelineScreen } from './components/screens/PipelineScreen';
-import { ImpactAndRoadmapScreen } from './components/screens/ImpactAndRoadmapScreen';
-import { LegalAssistantScreen } from './components/screens/LegalAssistantScreen';
-import { IncidentReportScreen } from './components/screens/IncidentReportScreen';
-import { ComplaintDraftModal } from './components/screens/ComplaintDraftModal';
-import { NearbyHelpScreen } from './components/screens/NearbyHelpScreen';
-import { EmergencyAssistanceScreen } from './components/screens/EmergencyAssistanceScreen';
-import { MyReportsScreen } from './components/screens/MyReportsScreen';
 import { DEFAULT_SCORING_WEIGHTS } from './services/scoringService';
+import { Loader2 } from 'lucide-react';
+
+// Code-split heavy screens so initial load is under 200ms
+const SearchRouteScreen = lazy(() =>
+  import('./components/screens/SearchRouteScreen').then((m) => ({ default: m.SearchRouteScreen }))
+);
+const RouteDetailsScreen = lazy(() =>
+  import('./components/screens/RouteDetailsScreen').then((m) => ({ default: m.RouteDetailsScreen }))
+);
+const LiveNavigationScreen = lazy(() =>
+  import('./components/screens/LiveNavigationScreen').then((m) => ({ default: m.LiveNavigationScreen }))
+);
+const MobilityProfileScreen = lazy(() =>
+  import('./components/screens/MobilityProfileScreen').then((m) => ({ default: m.MobilityProfileScreen }))
+);
+const BarrierIntelligenceScreen = lazy(() =>
+  import('./components/screens/BarrierIntelligenceScreen').then((m) => ({ default: m.BarrierIntelligenceScreen }))
+);
+const AIVisionScreen = lazy(() =>
+  import('./components/screens/AIVisionScreen').then((m) => ({ default: m.AIVisionScreen }))
+);
+const AccessibilityHeatmapScreen = lazy(() =>
+  import('./components/screens/AccessibilityHeatmapScreen').then((m) => ({ default: m.AccessibilityHeatmapScreen }))
+);
+const PlaceIntelligenceScreen = lazy(() =>
+  import('./components/screens/PlaceIntelligenceScreen').then((m) => ({ default: m.PlaceIntelligenceScreen }))
+);
+const MultiProfileSimulationScreen = lazy(() =>
+  import('./components/screens/MultiProfileSimulationScreen').then((m) => ({ default: m.MultiProfileSimulationScreen }))
+);
+const JourneySummaryScreen = lazy(() =>
+  import('./components/screens/JourneySummaryScreen').then((m) => ({ default: m.JourneySummaryScreen }))
+);
+const SavedPlacesScreen = lazy(() =>
+  import('./components/screens/SavedPlacesScreen').then((m) => ({ default: m.SavedPlacesScreen }))
+);
+const SettingsScreen = lazy(() =>
+  import('./components/screens/SettingsScreen').then((m) => ({ default: m.SettingsScreen }))
+);
+const PipelineScreen = lazy(() =>
+  import('./components/screens/PipelineScreen').then((m) => ({ default: m.PipelineScreen }))
+);
+const ImpactAndRoadmapScreen = lazy(() =>
+  import('./components/screens/ImpactAndRoadmapScreen').then((m) => ({ default: m.ImpactAndRoadmapScreen }))
+);
+const LegalAssistantScreen = lazy(() =>
+  import('./components/screens/LegalAssistantScreen').then((m) => ({ default: m.LegalAssistantScreen }))
+);
+const IncidentReportScreen = lazy(() =>
+  import('./components/screens/IncidentReportScreen').then((m) => ({ default: m.IncidentReportScreen }))
+);
+const ComplaintDraftModal = lazy(() =>
+  import('./components/screens/ComplaintDraftModal').then((m) => ({ default: m.ComplaintDraftModal }))
+);
+const NearbyHelpScreen = lazy(() =>
+  import('./components/screens/NearbyHelpScreen').then((m) => ({ default: m.NearbyHelpScreen }))
+);
+const EmergencyAssistanceScreen = lazy(() =>
+  import('./components/screens/EmergencyAssistanceScreen').then((m) => ({ default: m.EmergencyAssistanceScreen }))
+);
+const MyReportsScreen = lazy(() =>
+  import('./components/screens/MyReportsScreen').then((m) => ({ default: m.MyReportsScreen }))
+);
 import {
   auth,
   onAuthStateChanged,
@@ -57,7 +100,6 @@ export default function App() {
 
   // Screen router state
   const [activeScreen, setActiveScreen] = useState<string>('home');
-  const [showSplash, setShowSplash] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
 
@@ -205,15 +247,6 @@ export default function App() {
   } | null>(null);
 
   const [targetDestinationPlace, setTargetDestinationPlace] = useState<SavedPlace | undefined>(undefined);
-
-  // Splash screen timeout
-  useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 850);
-
-    return () => clearTimeout(splashTimer);
-  }, []);
 
   // Firebase auth state listener on app launch
   useEffect(() => {
@@ -417,27 +450,6 @@ export default function App() {
     setActiveScreen('home');
   };
 
-  // Screen 1: Splash Screen
-  if (showSplash) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white p-6 selection:bg-blue-600">
-        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-tr from-blue-600 to-cyan-500 shadow-2xl shadow-blue-500/20 mb-6 animate-pulse">
-          <Shield className="h-10 w-10 text-white" />
-        </div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-white mb-2">
-          SafeRoute<span className="text-blue-400"> AI</span>
-        </h1>
-        <p className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
-          Routes that understand you
-        </p>
-        <div className="mt-8 flex items-center gap-2 text-xs text-slate-500 font-mono">
-          <div className="h-2 w-2 rounded-full bg-blue-500 animate-ping" />
-          <span>Initializing accessibility intelligence...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-150">
       {/* Top Navbar */}
@@ -464,6 +476,14 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              <span className="text-xs font-medium">Loading safe route intelligence...</span>
+            </div>
+          }
+        >
         {activeScreen === 'home' && (
           <HomeScreen
             navigationMode={navigationMode}
@@ -740,6 +760,7 @@ export default function App() {
             isLocating={isLocating}
           />
         )}
+        </Suspense>
       </main>
 
       {/* Bottom Navigation */}

@@ -28,8 +28,23 @@ import {
   Eye,
   Sliders,
   RotateCcw,
-  Footprints
+  Footprints,
+  Database,
+  Wifi,
+  WifiOff,
+  HardDrive,
+  Trash2,
+  Zap,
 } from 'lucide-react';
+import {
+  cacheRouteSummary,
+  findCachedRoute,
+  getRecentRouteSummaries,
+  getRecentlyVisitedAreas,
+  recordVisitedArea,
+  deleteCachedRoute,
+} from '../../services/indexedDbCache';
+import { CachedRouteSummary, CachedVisitedArea } from '../../types';
 
 interface Props {
   currentLocation?: Coordinates;
@@ -82,6 +97,45 @@ export const SearchRouteScreen: React.FC<Props> = ({
   const [calcError, setCalcError] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RouteAlternative[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+
+  // IndexedDB offline resilience states
+  const [recentCachedRoutes, setRecentCachedRoutes] = useState<CachedRouteSummary[]>([]);
+  const [visitedAreas, setVisitedAreas] = useState<CachedVisitedArea[]>([]);
+  const [isOfflineServed, setIsOfflineServed] = useState<boolean>(false);
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [showOfflineSection, setShowOfflineSection] = useState<boolean>(true);
+
+  // Load IndexedDB cached routes & visited areas on mount
+  const refreshCacheData = async () => {
+    try {
+      const [rRoutes, vAreas] = await Promise.all([
+        getRecentRouteSummaries(6),
+        getRecentlyVisitedAreas(6),
+      ]);
+      setRecentCachedRoutes(rRoutes);
+      setVisitedAreas(vAreas);
+    } catch (e) {
+      console.warn('Error loading IndexedDB cache:', e);
+    }
+  };
+
+  useEffect(() => {
+    refreshCacheData();
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Update origin if currentLocation arrives and mode is current_location
   useEffect(() => {
@@ -150,12 +204,39 @@ export const SearchRouteScreen: React.FC<Props> = ({
     setIsCalculating(true);
     setCalcError(null);
     setRoutes([]);
+    setIsOfflineServed(false);
+    setOfflineNotice(null);
 
+    // 1. Fast path if device is offline: check IndexedDB
+    if (!navigator.onLine) {
+      try {
+        const cached = await findCachedRoute(originCoords, destCoords, activeProfile.id);
+        if (cached && cached.routes && cached.routes.length > 0) {
+          setRoutes(cached.routes);
+          setSelectedRouteIndex(0);
+          setIsOfflineServed(true);
+          setOfflineNotice(
+            `⚡ Offline Mode: Loaded from IndexedDB storage (Recorded on ${new Date(
+              cached.cachedAt
+            ).toLocaleDateString()})`
+          );
+          setIsCalculating(false);
+          return;
+        }
+      } catch (e) {
+        console.warn('Error reading from IndexedDB:', e);
+      }
+    }
+
+    // 2. Fetch walking directions online
     try {
       const rawRoutes = await fetchWalkingRoutes(
         [originCoords.lng, originCoords.lat],
         [destCoords.lng, destCoords.lat]
       );
+
+      // Check if the response was already fulfilled by IndexedDB fallback inside mapboxService
+      const isFromCache = rawRoutes.some((r: any) => r._isOfflineCached);
 
       // Evaluate and score all alternatives using our multi-factor scoring formula
       const scored: RouteAlternative[] = rawRoutes.map((r: any, idx: number) =>
@@ -167,10 +248,88 @@ export const SearchRouteScreen: React.FC<Props> = ({
 
       setRoutes(scored);
       setSelectedRouteIndex(0);
+
+      if (isFromCache) {
+        setIsOfflineServed(true);
+        setOfflineNotice('⚡ Loaded from local IndexedDB cache (Low connectivity mode).');
+      } else {
+        // Automatically persist successfully scored routes to IndexedDB for offline access
+        try {
+          await cacheRouteSummary(
+            originCoords,
+            destCoords,
+            originQuery || 'Origin Location',
+            destQuery || 'Destination Location',
+            scored,
+            activeProfile.id
+          );
+          // Register both endpoints as recently visited areas in IndexedDB
+          await recordVisitedArea(originQuery || 'Origin Location', originCoords, 2.0);
+          await recordVisitedArea(destQuery || 'Destination Location', destCoords, 2.0);
+          await refreshCacheData();
+        } catch (storageErr) {
+          console.warn('Could not cache route in IndexedDB:', storageErr);
+        }
+      }
     } catch (err: any) {
+      // 3. Fallback on network failure or timeout: check IndexedDB
+      try {
+        const cached = await findCachedRoute(originCoords, destCoords, activeProfile.id);
+        if (cached && cached.routes && cached.routes.length > 0) {
+          setRoutes(cached.routes);
+          setSelectedRouteIndex(0);
+          setIsOfflineServed(true);
+          setOfflineNotice(
+            '⚡ Cellular connection weak: Seamlessly served route from IndexedDB local storage.'
+          );
+          return;
+        }
+      } catch {}
+
       setCalcError(err.message || 'Failed to calculate route directions.');
     } finally {
       setIsCalculating(false);
+    }
+  };
+
+  // Quick select an IndexedDB cached route
+  const handleSelectCachedRoute = (summary: CachedRouteSummary) => {
+    setOriginCoords(summary.originCoords);
+    setOriginQuery(summary.originName);
+    setOriginMode('manual');
+    setDestCoords(summary.destinationCoords);
+    setDestQuery(summary.destinationName);
+    setRoutes(summary.routes);
+    setSelectedRouteIndex(0);
+    setIsOfflineServed(true);
+    setOfflineNotice(
+      `⚡ Loaded route from IndexedDB (${new Date(summary.cachedAt).toLocaleDateString()} ${new Date(
+        summary.cachedAt
+      ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+    );
+    setCalcError(null);
+  };
+
+  // Delete an IndexedDB cached route
+  const handleDeleteCachedRoute = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await deleteCachedRoute(id);
+      await refreshCacheData();
+    } catch (err) {
+      console.warn('Failed to delete cached route:', err);
+    }
+  };
+
+  // Quick select a visited area as origin or destination
+  const handleSelectVisitedArea = (area: CachedVisitedArea, target: 'origin' | 'dest') => {
+    if (target === 'origin') {
+      setOriginCoords(area.center);
+      setOriginQuery(area.name);
+      setOriginMode('manual');
+    } else {
+      setDestCoords(area.center);
+      setDestQuery(area.name);
     }
   };
 
@@ -359,6 +518,117 @@ export const SearchRouteScreen: React.FC<Props> = ({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Offline Notice Banner */}
+        {offlineNotice && (
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs shadow-lg animate-fadeIn">
+            <Zap className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span className="flex-1 font-medium">{offlineNotice}</span>
+            <span className="text-[10px] bg-cyan-900/80 px-2 py-0.5 rounded-full border border-cyan-600/50 uppercase tracking-wider font-bold">
+              IndexedDB
+            </span>
+          </div>
+        )}
+
+        {/* Recently Visited Areas (IndexedDB) */}
+        {visitedAreas.length > 0 && (
+          <div className="pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5 font-medium">
+              <span className="flex items-center gap-1">
+                <Database className="w-3.5 h-3.5 text-blue-400" />
+                <span>Recently Visited Areas (Offline Cache)</span>
+              </span>
+              <span className="text-[10px] text-slate-500">Tap to set as Dest</span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+              {visitedAreas.map((area) => (
+                <button
+                  key={area.id}
+                  type="button"
+                  onClick={() => handleSelectVisitedArea(area, 'dest')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-700 hover:border-blue-500/50 hover:bg-slate-800 text-slate-200 transition shrink-0"
+                >
+                  <MapPin className="w-3 h-3 text-cyan-400" />
+                  <span className="font-medium truncate max-w-[140px]">{area.name.split(',')[0]}</span>
+                  {area.hasOfflineTiles && (
+                    <span className="text-[9px] bg-blue-900/60 text-blue-300 px-1 py-0.2 rounded font-mono" title="Offline tiles cached in IndexedDB">
+                      Tiles
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recently Cached Routes (IndexedDB) */}
+        {recentCachedRoutes.length > 0 && (
+          <div className="pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                type="button"
+                onClick={() => setShowOfflineSection(!showOfflineSection)}
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-200 hover:text-white"
+              >
+                <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Offline Cached Routes ({recentCachedRoutes.length})</span>
+                <span className="text-[10px] font-normal text-slate-400">
+                  {showOfflineSection ? '(Hide)' : '(Show)'}
+                </span>
+              </button>
+              <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-mono">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Zero Network Latency</span>
+              </div>
+            </div>
+
+            {showOfflineSection && (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1 no-scrollbar">
+                {recentCachedRoutes.map((summary) => (
+                  <div
+                    key={summary.id}
+                    onClick={() => handleSelectCachedRoute(summary)}
+                    className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-800/60 transition cursor-pointer flex items-center justify-between gap-3 group"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-100 truncate">
+                        <span className="text-blue-400">⚡</span>
+                        <span className="truncate">{summary.originName.split(',')[0]}</span>
+                        <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span className="text-cyan-300 truncate">{summary.destinationName.split(',')[0]}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-mono">
+                        <span>{summary.distanceMeters}m</span>
+                        <span>·</span>
+                        <span>{summary.durationMinutes} min</span>
+                        <span>·</span>
+                        <span className="text-emerald-400 font-semibold">{summary.suitabilityScore}% Match</span>
+                        <span>·</span>
+                        <span className="text-slate-500">
+                          {new Date(summary.cachedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] font-semibold text-blue-400 group-hover:underline">
+                        Load
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteCachedRoute(e, summary.id)}
+                        className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition"
+                        title="Delete from local cache"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -307,17 +307,19 @@ export const MapboxMap: React.FC<Props> = ({
       )}
 
       {/* Floating Offline Map Badge */}
-      {(activeOfflinePack || isOfflineMode) && (
+      {(activeOfflinePack || isOfflineMode || routes[selectedRouteIndex]?.isOfflineCached) && (
         <div className="absolute bottom-4 left-4 z-10 rounded-xl bg-slate-900/95 border border-cyan-500/40 px-3 py-1.5 backdrop-blur-md shadow-lg flex items-center gap-2 text-[11px]">
-          {isOfflineMode ? (
-            <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          {isOfflineMode || routes[selectedRouteIndex]?.isOfflineCached ? (
+            <Zap className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           ) : (
             <HardDrive className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           )}
           <span className="text-slate-200 font-medium">
-            {activeOfflinePack
+            {routes[selectedRouteIndex]?.isOfflineCached
+              ? 'IndexedDB Local Cache Active'
+              : activeOfflinePack
               ? `Offline Ready (${activeOfflinePack.cityName})`
-              : 'Offline Map Cache Active'}
+              : 'Local Map Tile Cache Active'}
           </span>
         </div>
       )}
@@ -325,8 +327,13 @@ export const MapboxMap: React.FC<Props> = ({
       {/* Active Route Floating Badge */}
       {routes.length > 0 && routes[selectedRouteIndex] && (
         <div className="absolute top-3 left-3 z-10 rounded-xl bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 backdrop-blur-md shadow-lg flex items-center gap-2 text-xs">
-          <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+          <div className={`h-2.5 w-2.5 rounded-full ${routes[selectedRouteIndex].isOfflineCached ? 'bg-cyan-400' : 'bg-blue-500'} animate-pulse`} />
           <span className="font-semibold text-slate-100">{routes[selectedRouteIndex].name}</span>
+          {routes[selectedRouteIndex].isOfflineCached && (
+            <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-1.5 py-0.2 rounded font-mono">
+              OFFLINE
+            </span>
+          )}
           <span className="text-slate-400 font-mono">
             {routes[selectedRouteIndex].distanceMeters}m · {routes[selectedRouteIndex].durationMinutes} min
           </span>
