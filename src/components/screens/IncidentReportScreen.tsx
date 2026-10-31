@@ -15,17 +15,21 @@ import {
   RefreshCw,
   Locate,
   Shield,
-  FileCheck
+  FileCheck,
+  Landmark,
+  ExternalLink,
+  PhoneCall,
 } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../../utils/translations';
 import { Coordinates } from '../../types';
-import { requestCurrentPosition } from '../../services/locationService';
+import { requestCurrentPosition, getLastKnownLocation } from '../../services/locationService';
 import {
   saveIncidentReport,
   IncidentReportData,
   EvidenceFileItem,
   UserProfileData,
 } from '../../services/firebase';
+import { OFFICIAL_GRIEVANCE_PORTALS, OfficialGrievancePortal } from '../../data/officialPortals';
 import { safeStorage } from '../../utils/storage';
 
 interface Props {
@@ -73,12 +77,18 @@ export const IncidentReportScreen: React.FC<Props> = ({
     return now.toISOString().slice(0, 16);
   });
   const [locationText, setLocationText] = useState<string>('');
-  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(() => {
+    return getLastKnownLocation() || null;
+  });
   const [isLocating, setIsLocating] = useState(false);
   const [desiredAssistance, setDesiredAssistance] = useState<string>('');
   const [preferredLang, setPreferredLang] = useState<Language>(language);
   const [evidenceList, setEvidenceList] = useState<EvidenceFileItem[]>([]);
   
+  // Selected Official Authority / Grievance Portal
+  const [selectedPortalId, setSelectedPortalId] = useState<string>('gcc_municipal');
+  const selectedPortal = OFFICIAL_GRIEVANCE_PORTALS.find((p) => p.id === selectedPortalId) || OFFICIAL_GRIEVANCE_PORTALS[0];
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDrafting, setIsDrafting] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -87,18 +97,35 @@ export const IncidentReportScreen: React.FC<Props> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  // Acquire live GPS position
+  // Acquire live GPS position (Instant from memory/cache + fast background fix)
   const handleUseCurrentLocation = async () => {
+    // 1. Immediate assignment if cached
+    const cached = getLastKnownLocation();
+    if (cached) {
+      setCoordinates(cached);
+      if (!locationText) {
+        setLocationText(`GPS: ${cached.lat.toFixed(5)}, ${cached.lng.toFixed(5)}`);
+      }
+    }
+
     setIsLocating(true);
     setFormError(null);
     try {
-      const result = await requestCurrentPosition();
+      const result = await requestCurrentPosition({
+        onImmediateLocation: (c) => {
+          setCoordinates(c);
+          if (!locationText) {
+            setLocationText(`GPS: ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`);
+          }
+        },
+      });
+
       if (result.status === 'success' && result.coordinates) {
         setCoordinates(result.coordinates);
         if (!locationText) {
           setLocationText(`GPS: ${result.coordinates.lat.toFixed(5)}, ${result.coordinates.lng.toFixed(5)}`);
         }
-      } else {
+      } else if (!cached) {
         setFormError(
           result.errorMessage ||
           (language === 'ta'
@@ -108,11 +135,13 @@ export const IncidentReportScreen: React.FC<Props> = ({
       }
     } catch (err: any) {
       console.warn('Location denied or failed:', err);
-      setFormError(
-        language === 'ta'
-          ? 'இருப்பிட அனுமதி வழங்கப்படவில்லை. நீங்கள் கைமுறையாக முகவரியை உள்ளிடலாம்.'
-          : 'Location permission was denied or unavailable. You can enter the location manually.'
-      );
+      if (!cached) {
+        setFormError(
+          language === 'ta'
+            ? 'இருப்பிட அனுமதி வழங்கப்படவில்லை. நீங்கள் கைமுறையாக முகவரியை உள்ளிடலாம்.'
+            : 'Location permission was denied or unavailable. You can enter the location manually.'
+        );
+      }
     } finally {
       setIsLocating(false);
     }
@@ -204,8 +233,8 @@ export const IncidentReportScreen: React.FC<Props> = ({
         desiredAssistance,
         complaintDraft: preferredLang === 'ta' && draft.fullFormattedDraftTamil ? draft.fullFormattedDraftTamil : draft.fullFormattedDraft,
         status: 'draft_created',
-        receivingAuthority: draft.addressedTo || 'Appropriate Official Authority',
-        officialPortalUrl: draft.officialPortalUrl || 'https://eservices.tnpolice.gov.in/',
+        receivingAuthority: selectedPortal.name,
+        officialPortalUrl: selectedPortal.portalUrl,
         evidenceFiles: evidenceList,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -251,6 +280,8 @@ export const IncidentReportScreen: React.FC<Props> = ({
       preferredLanguage: preferredLang,
       desiredAssistance,
       status: 'ready_for_review',
+      receivingAuthority: selectedPortal.name,
+      officialPortalUrl: selectedPortal.portalUrl,
       evidenceFiles: evidenceList,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -553,6 +584,82 @@ export const IncidentReportScreen: React.FC<Props> = ({
               placeholder={t.desiredAssistancePlaceholder}
               className="w-full rounded-2xl bg-slate-950 border border-slate-800 px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
             />
+          </div>
+        </div>
+
+        {/* 7. Official Grievance Authority Selector (User Request: "last la entha option la complaint nu kekanum antha option padi antha website la poitu complaint poganum") */}
+        <div className="pt-3 border-t border-slate-800 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-cyan-400" />
+              <span>
+                {language === 'ta'
+                  ? 'புகார் அளிக்க வேண்டிய அரசு அமைப்பு / இணையதளம்'
+                  : 'Select Official Grievance Portal to File Complaint'}
+              </span>
+            </label>
+            <span className="text-[10px] text-cyan-300 bg-cyan-950 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono">
+              {language === 'ta' ? 'நேரடி இணையதளம்' : 'Official Portal'}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            {language === 'ta'
+              ? 'உங்கள் மனு எந்த அரசு போர்ட்டலில் சமர்ப்பிக்கப்பட வேண்டும் என்பதைத் தேர்ந்தெடுக்கவும். புகார் தயாரானதும் இந்த தளத்திற்குச் சென்று பதிவு செய்யலாம்.'
+              : 'Choose the appropriate department portal. SafeRoute will format your grievance and launch their official submission site.'}
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {OFFICIAL_GRIEVANCE_PORTALS.map((portal) => {
+              const isSelected = selectedPortalId === portal.id;
+
+              return (
+                <div
+                  key={portal.id}
+                  onClick={() => setSelectedPortalId(portal.id)}
+                  className={`p-3 rounded-2xl border text-left cursor-pointer transition space-y-1 ${
+                    isSelected
+                      ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500/40 shadow-md'
+                      : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="text-xs font-bold text-white">
+                      {language === 'ta' ? portal.nameTamil : portal.name}
+                    </span>
+                    {isSelected && (
+                      <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-400 line-clamp-1">
+                    {language === 'ta' ? portal.scopeTamil : portal.scope}
+                  </div>
+                  <div className="flex items-center justify-between pt-1 text-[10px] font-mono">
+                    <span className={`px-2 py-0.5 rounded-md border ${portal.badgeColor}`}>
+                      {portal.badge}
+                    </span>
+                    <span className="text-cyan-400 flex items-center gap-1 font-semibold">
+                      <span>Visit</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selected Portal preview */}
+          <div className="p-3 rounded-xl bg-slate-950/80 border border-cyan-500/30 flex items-center justify-between text-xs text-slate-300">
+            <div className="flex items-center gap-2 truncate">
+              <ExternalLink className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-slate-400">{language === 'ta' ? 'தேர்வு:' : 'Target:'}</span>
+              <span className="font-bold text-white truncate">
+                {language === 'ta' ? selectedPortal.nameTamil.split('(')[0] : selectedPortal.name}
+              </span>
+            </div>
+            <span className="text-[10px] text-emerald-400 font-mono font-bold shrink-0">
+              {selectedPortal.portalUrl.replace('https://', '').split('/')[0]}
+            </span>
           </div>
         </div>
 

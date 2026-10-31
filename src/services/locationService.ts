@@ -113,31 +113,47 @@ async function fetchIpGeolocation(): Promise<{ coords: Coordinates; cityName?: s
 }
 
 /**
- * Robust multi-tier location requester:
- * 1. Native High-Accuracy Device GPS (15s timeout to allow user to tap 'Allow' and GPS hardware to lock)
- * 2. Low-Accuracy Network/Cell/Wi-Fi positioning (10s timeout)
- * 3. IP-based Geolocation fallback
- * 4. Last Cached Location fallback
- * 5. Tamil Nadu default (Chennai Central)
- *
- * Always returns coordinates so caller is NEVER stranded with an empty state!
+ * Robust multi-tier location requester with INSTANT response:
+ * 1. Checks cached last-known position immediately (0ms).
+ * 2. Asks native device GPS with 5-minute maximumAge cache allowance (10-50ms return on Android/iOS).
+ * 3. 4-second timeout limit on cold GPS to prevent mobile hanging.
+ * 4. Fast IP & preset fallbacks so the user is never stuck waiting.
  */
-export async function requestCurrentPosition(): Promise<LocationResult> {
+export async function requestCurrentPosition(options?: {
+  onImmediateLocation?: (coords: Coordinates) => void;
+  preferInstant?: boolean;
+}): Promise<LocationResult> {
+  // Step 0: If cached location exists, immediately notify caller
+  const cached = getLastKnownLocation();
+  if (cached && options?.onImmediateLocation) {
+    options.onImmediateLocation(cached);
+  }
+
+  if (cached && options?.preferInstant) {
+    return {
+      status: 'success',
+      coordinates: cached,
+      source: 'cache',
+      accuracyMeters: 50,
+      timestamp: Date.now(),
+    };
+  }
+
   // Check permission state first if available
   const permState = await checkGeolocationPermission();
   let permissionNotice = '';
   if (permState === 'denied') {
-    permissionNotice = 'Location access is blocked in your browser site settings. Tap the lock/tune icon in your address bar to enable high-accuracy GPS.';
+    permissionNotice = 'Location access is blocked in site settings. Tap the lock icon in your address bar to enable GPS.';
   }
 
-  // If permission is not blocked, attempt Native GPS
-  if (permState !== 'denied') {
-    // Step 1: High Accuracy Native GPS (15 seconds)
+  // If permission is not blocked, attempt Native GPS with low latency options
+  if (permState !== 'denied' && typeof window !== 'undefined' && navigator.geolocation) {
+    // Step 1: Fast Device GPS with maximumAge: 300000 (5 minutes) and 4s timeout
     try {
       const pos = await getPositionPromise({
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 5000,
+        timeout: 4000,
+        maximumAge: 300000, // Reuse fresh device GPS fix if available
       });
 
       const coords: Coordinates = {
@@ -154,19 +170,18 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
         timestamp: pos.timestamp,
       };
     } catch (gpsError: any) {
-      console.warn('[LocationService] High accuracy GPS failed or timed out:', gpsError?.message);
+      console.warn('[LocationService] Fast high-accuracy GPS timed out or unavailable:', gpsError?.message);
       if (gpsError?.code === 1) {
-        // Permission denied by user during prompt
-        permissionNotice = 'Location access was not granted. Tap the lock icon in your address bar to allow location.';
+        permissionNotice = 'Location access was denied. Tap lock icon in address bar to allow location.';
       }
     }
 
-    // Step 2: Low-accuracy fast network/cell tower positioning (10 seconds)
+    // Step 2: Low-accuracy fast network/cell tower positioning (3s timeout)
     try {
       const pos = await getPositionPromise({
         enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 60000,
+        timeout: 3000,
+        maximumAge: 600000, // 10 minutes cache
       });
 
       const coords: Coordinates = {
@@ -183,11 +198,23 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
         timestamp: pos.timestamp,
       };
     } catch (netError: any) {
-      console.warn('[LocationService] Low accuracy positioning failed:', netError?.message);
+      console.warn('[LocationService] Low-accuracy positioning failed:', netError?.message);
     }
   }
 
-  // Step 3: Fast IP-based Geolocation fallback
+  // Step 3: Fast cached location if available
+  if (cached) {
+    return {
+      status: 'success',
+      coordinates: cached,
+      source: 'cache',
+      accuracyMeters: 100,
+      errorMessage: permissionNotice || 'Using last known GPS location.',
+      timestamp: Date.now(),
+    };
+  }
+
+  // Step 4: Fast IP-based Geolocation fallback
   try {
     const ipResult = await fetchIpGeolocation();
     if (ipResult) {
@@ -198,7 +225,7 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
         cityName: ipResult.cityName,
         accuracyMeters: 5000,
         source: 'ip',
-        errorMessage: permissionNotice || 'Location estimated via network IP. Enable device GPS for precise walking guidance.',
+        errorMessage: permissionNotice || 'Location estimated via network IP.',
         timestamp: Date.now(),
       };
     }
@@ -206,20 +233,7 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
     console.warn('[LocationService] IP geolocation failed:', ipErr);
   }
 
-  // Step 4: Check cached location
-  const cached = getLastKnownLocation();
-  if (cached) {
-    return {
-      status: 'success',
-      coordinates: cached,
-      source: 'cache',
-      accuracyMeters: 10000,
-      errorMessage: permissionNotice || 'Using last known location while searching for GPS signal.',
-      timestamp: Date.now(),
-    };
-  }
-
-  // Step 5: Default to Chennai Central preset
+  // Step 5: Default to Chennai Central preset so UI is never blank
   const defaultPreset = POPULAR_LOCATION_PRESETS[0];
   return {
     status: 'success',
@@ -227,7 +241,7 @@ export async function requestCurrentPosition(): Promise<LocationResult> {
     cityName: defaultPreset.name,
     source: 'preset',
     accuracyMeters: 15000,
-    errorMessage: permissionNotice || 'Defaulting to Chennai Central. Tap "Quick Pick" or enter your address manually.',
+    errorMessage: permissionNotice || 'Defaulting to Chennai Central.',
     timestamp: Date.now(),
   };
 }

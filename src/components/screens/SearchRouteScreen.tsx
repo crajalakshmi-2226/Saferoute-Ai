@@ -45,6 +45,10 @@ import {
   deleteCachedRoute,
 } from '../../services/indexedDbCache';
 import { CachedRouteSummary, CachedVisitedArea } from '../../types';
+import { getLastKnownLocation } from '../../services/locationService';
+import { calculateMultiModalComparison } from '../../services/multiModalService';
+import { MultiModalComparisonCard } from '../MultiModalComparisonCard';
+import { Language } from '../../utils/translations';
 
 interface Props {
   currentLocation?: Coordinates;
@@ -59,6 +63,7 @@ interface Props {
   savedPlaces: SavedPlace[];
   initialDestination?: SavedPlace;
   scoringWeights?: ScoringWeights;
+  language?: Language;
 }
 
 export const SearchRouteScreen: React.FC<Props> = ({
@@ -74,13 +79,17 @@ export const SearchRouteScreen: React.FC<Props> = ({
   savedPlaces,
   initialDestination,
   scoringWeights = DEFAULT_SCORING_WEIGHTS,
+  language = 'en',
 }) => {
+  // Instant Origin Location check (0ms response)
+  const initialLoc = currentLocation || getLastKnownLocation() || undefined;
+
   // Origin State
   const [originMode, setOriginMode] = useState<'current_location' | 'manual'>(
-    currentLocation ? 'current_location' : 'manual'
+    initialLoc ? 'current_location' : 'manual'
   );
-  const [originQuery, setOriginQuery] = useState(currentLocation ? 'My Current Location' : '');
-  const [originCoords, setOriginCoords] = useState<Coordinates | undefined>(currentLocation);
+  const [originQuery, setOriginQuery] = useState(initialLoc ? 'My Current Location' : '');
+  const [originCoords, setOriginCoords] = useState<Coordinates | undefined>(initialLoc);
   const [originSuggestions, setOriginSuggestions] = useState<GeocodingResult[]>([]);
   const [isSearchingOrigin, setIsSearchingOrigin] = useState(false);
 
@@ -97,6 +106,18 @@ export const SearchRouteScreen: React.FC<Props> = ({
   const [calcError, setCalcError] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RouteAlternative[]>([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+
+  // Multi-Modal Comparison across Car, Bike, Bus, Walk, Train + Delay Breakdown
+  const multiModalData = React.useMemo(() => {
+    if (!originCoords || !destCoords) return null;
+    return calculateMultiModalComparison(
+      originCoords,
+      destCoords,
+      originQuery || 'Origin Location',
+      destQuery || 'Destination Location',
+      routes[selectedRouteIndex]
+    );
+  }, [originCoords, destCoords, originQuery, destQuery, routes, selectedRouteIndex]);
 
   // IndexedDB offline resilience states
   const [recentCachedRoutes, setRecentCachedRoutes] = useState<CachedRouteSummary[]>([]);
@@ -378,6 +399,12 @@ export const SearchRouteScreen: React.FC<Props> = ({
             <button
               onClick={async () => {
                 setOriginMode('current_location');
+                // Immediate 0ms assignment from memory or localStorage
+                const fastLoc = currentLocation || getLastKnownLocation();
+                if (fastLoc) {
+                  setOriginCoords(fastLoc);
+                  setOriginQuery('My Current Location');
+                }
                 const coords = await onUseCurrentLocation();
                 if (coords) {
                   setOriginCoords(coords);
@@ -390,7 +417,7 @@ export const SearchRouteScreen: React.FC<Props> = ({
                   ? 'bg-blue-600 text-white border-blue-500 shadow-md'
                   : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
               }`}
-              title="Use current real device location"
+              title="Use current real device location (Instant)"
             >
               <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin text-cyan-400' : 'text-blue-400'}`} />
               <span className="font-bold">{isLocating ? 'Locating...' : 'My Location (GPS)'}</span>
@@ -655,6 +682,14 @@ export const SearchRouteScreen: React.FC<Props> = ({
           className="h-[360px] w-full"
         />
       </div>
+
+      {/* Multi-Modal Travel Time Comparison across Car, Bike, Bus, Walk, Train + Why / Delay Breakdown */}
+      {multiModalData && (
+        <MultiModalComparisonCard
+          data={multiModalData}
+          language={language}
+        />
+      )}
 
       {/* Route Alternatives List & Suitability Scoring */}
       {routes.length > 0 && (

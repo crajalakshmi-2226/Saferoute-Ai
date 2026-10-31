@@ -17,6 +17,10 @@ import {
   FileText
 } from 'lucide-react';
 
+import { MultiModalComparisonCard } from '../MultiModalComparisonCard';
+import { calculateMultiModalComparison } from '../../services/multiModalService';
+import { Language } from '../../utils/translations';
+
 interface Props {
   route: RouteAlternative;
   onBack: () => void;
@@ -25,6 +29,7 @@ interface Props {
   activePreferences: MobilityPreferences;
   knownBarriers: BarrierReport[];
   scoringWeights?: ScoringWeights;
+  language?: Language;
 }
 
 export const RouteDetailsScreen: React.FC<Props> = ({
@@ -35,10 +40,19 @@ export const RouteDetailsScreen: React.FC<Props> = ({
   activePreferences,
   knownBarriers,
   scoringWeights = DEFAULT_SCORING_WEIGHTS,
+  language = 'en',
 }) => {
   const [explanation, setExplanation] = useState<string>('');
   const [loadingExplain, setLoadingExplain] = useState(false);
   const [explainEngine, setExplainEngine] = useState<string>('');
+
+  const multiModalData = React.useMemo(() => {
+    const coords = route.geometry?.coordinates;
+    if (!coords || coords.length < 2) return null;
+    const origin = { lng: coords[0][0], lat: coords[0][1] };
+    const destination = { lng: coords[coords.length - 1][0], lat: coords[coords.length - 1][1] };
+    return calculateMultiModalComparison(origin, destination, 'Starting Point', 'Destination', route);
+  }, [route]);
 
   useEffect(() => {
     async function fetchExplanation() {
@@ -288,6 +302,14 @@ export const RouteDetailsScreen: React.FC<Props> = ({
           </div>
         )}
       </div>
+
+      {/* Multi-Modal Comparison & Delay Factors (Car, Bike, Bus, Walk, Train) */}
+      {multiModalData && (
+        <MultiModalComparisonCard
+          data={multiModalData}
+          language={language}
+        />
+      )}
     </div>
   );
 };

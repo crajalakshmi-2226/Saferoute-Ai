@@ -12,7 +12,7 @@ import {
 } from './types';
 import { MOBILITY_PROFILES } from './data/mobilityProfiles';
 import { useTheme } from './hooks/useTheme';
-import { requestCurrentPosition } from './services/locationService';
+import { requestCurrentPosition, getLastKnownLocation } from './services/locationService';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { TokenSetupModal } from './components/TokenSetupModal';
@@ -168,8 +168,10 @@ export default function App() {
     return activeProfile.defaultPreferences;
   });
 
-  // Geolocation state
-  const [currentLocation, setCurrentLocation] = useState<Coordinates | undefined>(undefined);
+  // Geolocation state (pre-initialized with last known location for zero-latency start)
+  const [currentLocation, setCurrentLocation] = useState<Coordinates | undefined>(() => {
+    return getLastKnownLocation() || undefined;
+  });
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -302,27 +304,41 @@ export default function App() {
     loadBarriers();
   }, []);
 
-  // Handle GPS Current Location Request
+  // Handle GPS Current Location Request with INSTANT response
   const handleUseCurrentLocation = async (): Promise<Coordinates | undefined> => {
+    // 1. Immediately provide cached location if available
+    const cached = getLastKnownLocation();
+    if (cached) {
+      setCurrentLocation(cached);
+    }
+
     setIsLocating(true);
     setLocationError(null);
     try {
-      const result = await requestCurrentPosition();
+      const result = await requestCurrentPosition({
+        onImmediateLocation: (c) => {
+          setCurrentLocation(c);
+        },
+      });
+
       if (result.coordinates) {
         setCurrentLocation(result.coordinates);
         if (result.errorMessage && result.source !== 'gps') {
           setLocationError(result.errorMessage);
         }
         return result.coordinates;
+      } else if (cached) {
+        return cached;
       } else {
         setLocationError(result.errorMessage || 'Unable to retrieve location.');
       }
     } catch (err: any) {
+      if (cached) return cached;
       setLocationError(err.message || 'Geolocation failed.');
     } finally {
       setIsLocating(false);
     }
-    return undefined;
+    return cached || undefined;
   };
 
   // Profile and Preferences Save
@@ -524,6 +540,7 @@ export default function App() {
             savedPlaces={savedPlaces}
             initialDestination={targetDestinationPlace}
             scoringWeights={scoringWeights}
+            language={language}
           />
         )}
 
@@ -552,6 +569,7 @@ export default function App() {
             activePreferences={activePreferences}
             knownBarriers={knownBarriers}
             scoringWeights={scoringWeights}
+            language={language}
           />
         )}
 

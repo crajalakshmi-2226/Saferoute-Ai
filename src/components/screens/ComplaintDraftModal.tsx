@@ -11,10 +11,16 @@ import {
   Building,
   Scale,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Landmark,
+  Shield,
+  Layers,
+  PhoneCall,
+  Sparkles
 } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../../utils/translations';
 import { IncidentReportData, updateIncidentReportStatus } from '../../services/firebase';
+import { OFFICIAL_GRIEVANCE_PORTALS, OfficialGrievancePortal } from '../../data/officialPortals';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +41,19 @@ export const ComplaintDraftModal: React.FC<Props> = ({
 }) => {
   if (!isOpen || !draftData) return null;
   const t = TRANSLATIONS[language];
+  const isTamil = language === 'ta';
+
+  // Selected official portal state
+  const [selectedPortalId, setSelectedPortalId] = useState<string>(() => {
+    const cat = (reportData.category || '').toLowerCase();
+    if (cat.includes('access') || cat.includes('barrier') || cat.includes('ramp')) return 'sugamya_bharat';
+    if (cat.includes('highway') || cat.includes('expressway')) return 'nhai_morth';
+    if (cat.includes('police') || cat.includes('theft') || cat.includes('assault') || cat.includes('harass')) return 'tn_police';
+    if (cat.includes('road') || cat.includes('pothole') || cat.includes('footpath') || cat.includes('speed')) return 'gcc_municipal';
+    return 'gcc_municipal';
+  });
+
+  const selectedPortal = OFFICIAL_GRIEVANCE_PORTALS.find((p) => p.id === selectedPortalId) || OFFICIAL_GRIEVANCE_PORTALS[0];
 
   // Editable draft body
   const [editableDraftText, setEditableDraftText] = useState<string>(() => {
@@ -48,6 +67,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
     reportData.status || 'draft_created'
   );
   const [copied, setCopied] = useState(false);
+  const [portalLaunchToast, setPortalLaunchToast] = useState<string | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -71,11 +91,25 @@ export const ComplaintDraftModal: React.FC<Props> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleOpenOfficialChannel = () => {
-    const url = draftData.officialPortalUrl || reportData.officialPortalUrl || 'https://eservices.tnpolice.gov.in/';
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleOpenOfficialChannel = async () => {
+    // 1. Auto-copy draft to clipboard so user can easily paste on the official portal
+    try {
+      await navigator.clipboard.writeText(editableDraftText);
+      setCopied(true);
+    } catch (e) {
+      console.warn('Clipboard write error:', e);
+    }
+
+    setPortalLaunchToast(
+      isTamil
+        ? `புகார் மனு நகலெடுக்கப்பட்டது! ${selectedPortal.nameTamil.split('(')[0]} இணையதளம் திறக்கப்படுகிறது...`
+        : `Complaint draft copied! Launching ${selectedPortal.name.split('/')[0]} portal...`
+    );
+
+    // 2. Open chosen official portal website
+    window.open(selectedPortal.portalUrl, '_blank', 'noopener,noreferrer');
     
-    // Update status to 'opened_official_channel'
+    // 3. Update status to 'opened_official_channel'
     setCurrentStatus('opened_official_channel');
     if (reportData.userId && reportData.userId !== 'guest_user') {
       updateIncidentReportStatus(reportData.userId, reportData.id, 'opened_official_channel').catch(console.error);
@@ -84,9 +118,13 @@ export const ComplaintDraftModal: React.FC<Props> = ({
       onReportUpdated({
         ...reportData,
         status: 'opened_official_channel',
+        receivingAuthority: selectedPortal.name,
+        officialPortalUrl: selectedPortal.portalUrl,
         complaintDraft: editableDraftText,
       });
     }
+
+    setTimeout(() => setPortalLaunchToast(null), 4500);
   };
 
   return (
@@ -162,28 +200,94 @@ export const ComplaintDraftModal: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Receiving Authority and Verified Law Banner */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-              <span className="text-slate-400 font-semibold block">
-                {t.receivingAuthorityLabel}:
+          {/* Portal Launch Notification Toast */}
+          {portalLaunchToast && (
+            <div className="p-3 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2 shadow-lg animate-bounce">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="font-semibold">{portalLaunchToast}</span>
+            </div>
+          )}
+
+          {/* Authority Selection Section (User Request: "last la entha option la complaint nu kekanum antha option padi antha website la poitu complaint poganum") */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Landmark className="w-4 h-4 text-cyan-400" />
+                <span>
+                  {isTamil
+                    ? 'எந்த அரசு இணையதளத்தில் புகார் அளிக்க விரும்புகிறீர்கள்?'
+                    : 'Select Official Portal to File Complaint'}
+                </span>
+              </label>
+              <span className="text-[10px] text-cyan-400 bg-cyan-950 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono">
+                {isTamil ? 'அரசு தளம்' : 'Govt Portal'}
               </span>
-              <p className="font-bold text-white text-xs sm:text-sm">
-                {language === 'ta'
-                  ? draftData.addressedToTamil || draftData.addressedTo
-                  : draftData.addressedTo}
-              </p>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-              <span className="text-slate-400 font-semibold block">
-                {t.applicableProvisionsLabel}:
+            <p className="text-[11px] text-slate-400">
+              {isTamil
+                ? 'உங்கள் புகார் எந்த துறைக்குச் செல்ல வேண்டும் என்பதைத் தேர்ந்தெடுக்கவும். தேர்வு செய்த பின் நேரடியாக அந்த அரசு இணையதளம் திறக்கப்படும்.'
+                : 'Select the authority handling your incident. Your complaint text will be automatically copied, and their official portal will launch directly.'}
+            </p>
+
+            {/* Portal Option Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {OFFICIAL_GRIEVANCE_PORTALS.map((portal) => {
+                const isSelected = selectedPortalId === portal.id;
+
+                return (
+                  <div
+                    key={portal.id}
+                    onClick={() => setSelectedPortalId(portal.id)}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition space-y-1.5 ${
+                      isSelected
+                        ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500/40 shadow-md'
+                        : 'bg-slate-900 border-slate-800/90 hover:border-slate-700 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <span className="text-xs font-bold text-white leading-tight">
+                        {isTamil ? portal.nameTamil : portal.name}
+                      </span>
+                      {isSelected && (
+                        <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                      )}
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 line-clamp-2">
+                      {isTamil ? portal.scopeTamil : portal.scope}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 text-[10px] font-mono">
+                      <span className={`px-2 py-0.5 rounded-md border ${portal.badgeColor}`}>
+                        {portal.badge}
+                      </span>
+                      {portal.tollFree && (
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <PhoneCall className="w-3 h-3 text-emerald-400" />
+                          <span>{portal.tollFree}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Selected Portal Target Banner */}
+            <div className="p-3 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-between text-xs text-slate-300">
+              <div className="flex items-center gap-2 truncate">
+                <ExternalLink className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="font-semibold text-white truncate">
+                  {isTamil ? selectedPortal.nameTamil.split('(')[0] : selectedPortal.name}
+                </span>
+                <span className="text-[11px] text-cyan-400 font-mono hidden sm:inline truncate">
+                  ({selectedPortal.portalUrl})
+                </span>
+              </div>
+              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider shrink-0">
+                {isTamil ? 'தயார்' : 'Target Ready'}
               </span>
-              <p className="font-bold text-amber-400 text-xs">
-                {draftData.applicableLegalProvisions && draftData.applicableLegalProvisions.length > 0
-                  ? draftData.applicableLegalProvisions.join(', ')
-                  : 'Applicable statutory provisions'}
-              </p>
             </div>
           </div>
 
@@ -201,11 +305,11 @@ export const ComplaintDraftModal: React.FC<Props> = ({
                 {t.editDraft}
               </label>
               <span className="text-[11px] text-slate-500">
-                You can edit this draft before copying or submitting
+                {isTamil ? 'புகார் மனுவை சரிபார்த்து திருத்திக் கொள்ளலாம்' : 'You can edit this draft before proceeding'}
               </span>
             </div>
             <textarea
-              rows={12}
+              rows={11}
               value={editableDraftText}
               onChange={(e) => setEditableDraftText(e.target.value)}
               className="w-full rounded-2xl bg-slate-950 border border-slate-800 p-4 font-mono text-xs text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed"
@@ -221,7 +325,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5" />
-              <span>{copied ? 'Copied to Clipboard!' : t.copyDraft}</span>
+              <span>{copied ? (isTamil ? 'நகலெடுக்கப்பட்டது!' : 'Copied!') : t.copyDraft}</span>
             </button>
 
             <button
@@ -236,10 +340,14 @@ export const ComplaintDraftModal: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleOpenOfficialChannel}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer shadow-md active:scale-95"
+              className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl transition cursor-pointer shadow-lg active:scale-95"
             >
-              <span>{t.openOfficialPortal}</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <span>
+                {isTamil
+                  ? `புகாரை நகலெடுத்து இணையதளத்திற்குச் செல்`
+                  : `Copy Draft & Proceed to ${selectedPortal.badge}`}
+              </span>
+              <ExternalLink className="w-4 h-4" />
             </button>
           </div>
         </div>
