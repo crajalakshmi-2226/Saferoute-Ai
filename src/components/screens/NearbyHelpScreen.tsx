@@ -62,15 +62,16 @@ export const NearbyHelpScreen: React.FC<Props> = ({
   const categories = [
     { id: 'all', label: t.allFilter, icon: Compass },
     { id: 'police', label: t.policeFilter, icon: ShieldAlert },
-    { id: 'women_police', label: t.awpsFilter, icon: Users },
+    { id: 'women_police', label: language === 'ta' ? 'மகளிர் காவல் நிலையம்' : 'Women Police (AWPS)', icon: Users },
     { id: 'hospital', label: t.hospitalFilter, icon: HeartPulse },
+    { id: 'hotel', label: language === 'ta' ? 'தங்கும் விடுதி / ஹோட்டல்' : 'Safe Stay / Hotel', icon: Building2 },
     { id: 'pharmacy', label: t.pharmacyFilter, icon: Pill },
     { id: 'legal_aid', label: t.legalAidFilter, icon: Scale },
     { id: 'civic_office', label: t.civicFilter, icon: Building2 },
   ];
 
-  // Filter and sort verified places
-  const filteredPlaces = VERIFIED_HELP_PLACES.map((place) => {
+  // Compute all places with exact distance
+  const allWithDistance = VERIFIED_HELP_PLACES.map((place) => {
     const dist = getDistanceMeters(
       effectiveLocation.lat,
       effectiveLocation.lng,
@@ -81,30 +82,38 @@ export const NearbyHelpScreen: React.FC<Props> = ({
       ...place,
       distanceMeters: dist,
     };
-  })
-    .filter((place) => {
-      if (activeCategory !== 'all' && place.category !== activeCategory) {
-        return false;
-      }
-      if (place.distanceMeters > maxDistanceMeters) {
-        return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName =
-          place.name.toLowerCase().includes(q) ||
-          place.nameTamil.toLowerCase().includes(q);
-        const matchesAddr =
-          place.address.toLowerCase().includes(q) ||
-          place.addressTamil.toLowerCase().includes(q);
-        const matchesServ = place.servicesAvailable.some((s) =>
-          s.toLowerCase().includes(q)
-        );
-        return matchesName || matchesAddr || matchesServ;
-      }
-      return true;
-    })
-    .sort((a, b) => a.distanceMeters - b.distanceMeters);
+  }).sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+  // Filter based on active category & search
+  let filteredPlaces = allWithDistance.filter((place) => {
+    if (activeCategory !== 'all' && place.category !== activeCategory) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesName =
+        place.name.toLowerCase().includes(q) ||
+        place.nameTamil.toLowerCase().includes(q);
+      const matchesAddr =
+        place.address.toLowerCase().includes(q) ||
+        place.addressTamil.toLowerCase().includes(q);
+      const matchesServ = place.servicesAvailable.some((s) =>
+        s.toLowerCase().includes(q)
+      );
+      return matchesName || matchesAddr || matchesServ;
+    }
+    return true;
+  });
+
+  // Apply distance filter, but if 0 results found (e.g. user is in another city),
+  // automatically show the closest verified state facilities so user is never left without help!
+  const withinRadius = filteredPlaces.filter((p) => p.distanceMeters <= maxDistanceMeters);
+  if (withinRadius.length > 0) {
+    filteredPlaces = withinRadius;
+  } else {
+    // Show top closest places across the state
+    filteredPlaces = filteredPlaces.slice(0, 8);
+  }
 
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto">

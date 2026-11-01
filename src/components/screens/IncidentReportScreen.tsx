@@ -31,6 +31,7 @@ import {
 } from '../../services/firebase';
 import { OFFICIAL_GRIEVANCE_PORTALS, OfficialGrievancePortal } from '../../data/officialPortals';
 import { safeStorage } from '../../utils/storage';
+import { getLegalActionForCategory } from '../../data/legalActionProvisions';
 
 interface Props {
   language: Language;
@@ -181,7 +182,7 @@ export const IncidentReportScreen: React.FC<Props> = ({
     setEvidenceList((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Generate Complaint Draft via Backend API
+  // Generate Complaint Draft via Backend API (with robust local fallback so it NEVER fails)
   const handleGenerateDraft = async () => {
     if (!description.trim()) {
       setFormError(
@@ -196,6 +197,35 @@ export const IncidentReportScreen: React.FC<Props> = ({
     setFormError(null);
 
     const activeCat = category === 'Other incident' && customCategory.trim() ? customCategory : category;
+    const legalProvision = getLegalActionForCategory(activeCat);
+
+    // Fallback generator helper
+    const buildClientDraft = () => {
+      const authority = legalProvision.primaryAuthority;
+      const authorityTa = legalProvision.primaryAuthorityTamil;
+      const act = legalProvision.statutoryAct;
+      const actTa = legalProvision.statutoryActTamil;
+      const secs = legalProvision.applicableSections.join('; ');
+      const secsTa = legalProvision.applicableSectionsTamil.join('; ');
+
+      const draftEn = `To,\n${authority}\n\nSubject: Formal Complaint regarding ${activeCat} at ${locationText || 'Tamil Nadu'}\n\nRespected Sir/Madam,\n\nI am writing to formally submit a complaint regarding the following incident:\n\n1. Incident Date & Time: ${incidentDate || 'As stated'}\n2. Location: ${locationText || 'Mentioned coordinates'}\n3. Category: ${activeCat}\n\nStatement of Facts:\n${description}\n\nApplicable Statutory Provisions:\n- ${act}: ${secs}\n- Citizen Rights: ${legalProvision.citizenRights.join('; ')}\n\nAvailable Evidence:\n${evidenceList.length > 0 ? evidenceList.map((e) => `- ${e.name}`).join('\n') : '- Photographs / Video documentation preserved by complainant.'}\n\nRelief / Prayer:\n${desiredAssistance || 'Kindly register this complaint, issue a CSR/FIR or inspection order, and initiate prompt official inquiry under the applicable law.'}\n\nYours faithfully,\n[Complainant Name]\n[Contact Information]`;
+
+      const draftTa = `பெறுநர்:\n${authorityTa}\n\nபொருள்: ${activeCat} தொடர்பான சட்டப்பூர்வ புகார் மனு.\n\nமதிப்பிற்குரிய ஐயா / அம்மா,\n\n${incidentDate || 'குறிப்பிட்ட நாளில்'} ${locationText || 'குறிப்பிட்ட இடத்தில்'} நடந்த சம்பவம் குறித்து இந்த மனுவை சமர்ப்பிக்கிறேன்.\n\nநிகழ்ந்த விவரம்:\n${description}\n\nசட்டப் பிரிவுகள்:\n- ${actTa}: ${secsTa}\n- சட்டப்படி தண்டனை: ${legalProvision.penaltyUnderLawTamil}\n\nகோரிக்கை:\n${desiredAssistance || 'இந்த மனுவை ஏற்று உரிய சட்டப்பூர்வ நடவடிக்கை (CSR/FIR/ஆய்வு) எடுக்குமாறு பணிவுடன் கேட்டுக்கொள்கிறேன்.'}\n\nஇங்ஙனம்,\n[மனுதாரர் பெயர்]`;
+
+      return {
+        subject: `Complaint regarding ${activeCat} at ${locationText || 'Tamil Nadu'}`,
+        addressedTo: authority,
+        addressedToTamil: authorityTa,
+        incidentDetails: { date: incidentDate, location: locationText, category: activeCat },
+        chronologicalFacts: [description],
+        availableEvidence: evidenceList.map((e) => e.name),
+        applicableLegalProvisions: legalProvision.applicableSections,
+        requestedAction: desiredAssistance || 'Registration of complaint and necessary official inquiry.',
+        officialPortalUrl: selectedPortal.portalUrl,
+        fullFormattedDraft: draftEn,
+        fullFormattedDraftTamil: draftTa,
+      };
+    };
 
     try {
       const res = await fetch('/api/generate-complaint', {
@@ -212,12 +242,13 @@ export const IncidentReportScreen: React.FC<Props> = ({
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Failed to generate draft: HTTP ${res.status}`);
+      let draft: any;
+      if (res.ok) {
+        const data = await res.json();
+        draft = data.draft || buildClientDraft();
+      } else {
+        draft = buildClientDraft();
       }
-
-      const data = await res.json();
-      const draft = data.draft;
 
       // Construct provisional report payload
       const reportPayload: IncidentReportData = {
@@ -242,12 +273,29 @@ export const IncidentReportScreen: React.FC<Props> = ({
 
       onOpenDraftModal(draft, reportPayload);
     } catch (err: any) {
-      console.error('Draft error:', err);
-      setFormError(
-        language === 'ta'
-          ? 'மனுவை உருவாக்குவதில் சிக்கல் ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.'
-          : 'Failed to generate complaint draft. Please check connection and try again.'
-      );
+      console.warn('Network issue generating draft, using offline legal generator:', err);
+      const fallbackDraft = buildClientDraft();
+      const reportPayload: IncidentReportData = {
+        id: `rep_${Date.now()}`,
+        userId: userProfile?.uid || 'guest_user',
+        category: activeCat,
+        description,
+        incidentDate,
+        location: locationText,
+        latitude: coordinates?.lat,
+        longitude: coordinates?.lng,
+        preferredLanguage: preferredLang,
+        desiredAssistance,
+        complaintDraft: preferredLang === 'ta' && fallbackDraft.fullFormattedDraftTamil ? fallbackDraft.fullFormattedDraftTamil : fallbackDraft.fullFormattedDraft,
+        status: 'draft_created',
+        receivingAuthority: selectedPortal.name,
+        officialPortalUrl: selectedPortal.portalUrl,
+        evidenceFiles: evidenceList,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      onOpenDraftModal(fallbackDraft, reportPayload);
     } finally {
       setIsDrafting(false);
     }
@@ -657,11 +705,93 @@ export const IncidentReportScreen: React.FC<Props> = ({
                 {language === 'ta' ? selectedPortal.nameTamil.split('(')[0] : selectedPortal.name}
               </span>
             </div>
-            <span className="text-[10px] text-emerald-400 font-mono font-bold shrink-0">
-              {selectedPortal.portalUrl.replace('https://', '').split('/')[0]}
-            </span>
+            <a
+              href={selectedPortal.portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-cyan-400 hover:underline font-mono font-bold shrink-0 flex items-center gap-1"
+            >
+              <span>{selectedPortal.portalUrl.replace('https://', '').split('/')[0]}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
         </div>
+
+        {/* Statutory Legal Action Guidance ("satta padi kaami") */}
+        {(() => {
+          const activeCat = category === 'Other incident' && customCategory.trim() ? customCategory : category;
+          const legalInfo = getLegalActionForCategory(activeCat);
+          const isTa = language === 'ta';
+
+          return (
+            <div className="p-4 rounded-2xl bg-slate-950 border border-blue-500/30 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
+                    <Shield className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider block">
+                      {isTa ? 'சட்டப்படி நடவடிக்கை & விதிகள் (Statutory Rights)' : 'Statutory Legal Action & Citizen Rights'}
+                    </span>
+                    <span className="text-[11px] text-blue-300 font-semibold">
+                      {isTa ? legalInfo.statutoryActTamil : legalInfo.statutoryAct}
+                    </span>
+                  </div>
+                </div>
+
+                <span className="text-[10px] bg-blue-500/20 text-blue-300 font-mono font-bold px-2.5 py-0.5 rounded-full border border-blue-500/30 shrink-0">
+                  {isTa ? 'சட்டப் பிரிவு' : 'Law Provisions'}
+                </span>
+              </div>
+
+              {/* Applicable Sections */}
+              <div className="space-y-1.5 text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
+                  {isTa ? 'பொருந்தும் சட்டப் பிரிவுகள்:' : 'Applicable Sections & Codes:'}
+                </span>
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-200">
+                  {(isTa ? legalInfo.applicableSectionsTamil : legalInfo.applicableSections).map((sec, idx) => (
+                    <li key={idx} className="leading-snug">{sec}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Citizen Rights & Penalties */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                    {isTa ? 'சட்டப்படி உங்கள் உரிமைகள்:' : 'Your Legal Rights:'}
+                  </span>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    {(isTa ? legalInfo.citizenRightsTamil : legalInfo.citizenRights).slice(0, 2).join(' • ')}
+                  </p>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                    {isTa ? 'சட்டப்படி தண்டனை / அபராதம்:' : 'Statutory Penalty / Liability:'}
+                  </span>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    {isTa ? legalInfo.penaltyUnderLawTamil : legalInfo.penaltyUnderLaw}
+                  </p>
+                </div>
+              </div>
+
+              {/* Legal Procedure Steps */}
+              <div className="text-[11px] text-slate-300 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/80 space-y-1">
+                <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider block">
+                  {isTa ? 'சட்டப்படி புகார் அளிக்கும் நடைமுறை:' : 'Step-by-Step Legal Procedure:'}
+                </span>
+                <div className="space-y-0.5 text-slate-300">
+                  {(isTa ? legalInfo.sattaPadiNadavadaikai : legalInfo.procedureStepsEnglish).map((step, sIdx) => (
+                    <div key={sIdx}>{step}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Action Buttons */}
         <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center gap-3">

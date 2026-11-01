@@ -19,6 +19,8 @@ import {
 
 import { MultiModalComparisonCard } from '../MultiModalComparisonCard';
 import { calculateMultiModalComparison } from '../../services/multiModalService';
+import { extractCorridorInfrastructure } from '../../services/corridorPoiService';
+import { RouteCorridorAmenitiesCard } from '../RouteCorridorAmenitiesCard';
 import { Language } from '../../utils/translations';
 
 interface Props {
@@ -52,6 +54,14 @@ export const RouteDetailsScreen: React.FC<Props> = ({
     const origin = { lng: coords[0][0], lat: coords[0][1] };
     const destination = { lng: coords[coords.length - 1][0], lat: coords[coords.length - 1][1] };
     return calculateMultiModalComparison(origin, destination, 'Starting Point', 'Destination', route);
+  }, [route]);
+
+  const corridorData = React.useMemo(() => {
+    const coords = route.geometry?.coordinates;
+    if (!coords || coords.length < 2) return null;
+    const origin = { lng: coords[0][0], lat: coords[0][1] };
+    const destination = { lng: coords[coords.length - 1][0], lat: coords[coords.length - 1][1] };
+    return extractCorridorInfrastructure(origin, destination, 'Starting Point', 'Destination', route);
   }, [route]);
 
   useEffect(() => {
@@ -307,6 +317,14 @@ export const RouteDetailsScreen: React.FC<Props> = ({
       {multiModalData && (
         <MultiModalComparisonCard
           data={multiModalData}
+          language={language}
+        />
+      )}
+
+      {/* Corridor Infrastructure & Safety POIs (Bridges, Speed Breakers, Bus Stands, Hospitals, AWPS) */}
+      {corridorData && (
+        <RouteCorridorAmenitiesCard
+          corridorData={corridorData}
           language={language}
         />
       )}

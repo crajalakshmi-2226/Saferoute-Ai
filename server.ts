@@ -720,10 +720,28 @@ Output strictly valid JSON with this schema:
       draft: parsed
     });
   } catch (error: any) {
-    console.error('Complaint generation error:', error);
-    return res.status(500).json({
-      error: 'Failed to generate complaint draft.',
-      details: error.message
+    console.error('Complaint generation error, falling back to deterministic draft:', error);
+    const authority = matchedEntry?.authority || 'The Station House Officer / Concerned Municipal Officer';
+    const act = matchedEntry?.actName || 'Applicable Provisions of Law';
+    const sec = matchedEntry?.section || 'Relevant Section';
+    const draftText = `To,\n${authority}\n\nSubject: Formal Complaint regarding ${category || 'Incident'} at ${location || 'the mentioned location'}\n\nRespected Sir/Madam,\n\nI am writing to formally bring to your attention an incident that occurred on ${incidentDate || 'the specified date'} at ${location || 'the specified location'}.\n\nStatement of Facts (As provided by complainant):\n${description}\n\nAvailable Evidence:\n${evidenceList.length > 0 ? evidenceList.map((e: any) => `- ${e.name || e}`).join('\n') : '- Photographs / Video recordings preserved by complainant.'}\n\nRelevant Applicable Legal Provision:\n${act} (${sec})\n\nPrayer / Relief Sought:\n${desiredAssistance || 'Kindly register this complaint, conduct an urgent inquiry, and initiate appropriate official action under the law.'}\n\nYours faithfully,\n[Complainant Name]\n[Contact Information]`;
+
+    return res.json({
+      success: true,
+      generatedBy: 'fallback_deterministic_draft_engine',
+      draft: {
+        subject: `Complaint regarding ${category || 'Incident'} at ${location || 'Tamil Nadu'}`,
+        addressedTo: authority,
+        addressedToTamil: matchedEntry?.authorityTamil || 'காவல் நிலைய பொறுப்பு அதிகாரி',
+        incidentDetails: { date: incidentDate, location, category },
+        chronologicalFacts: [description],
+        availableEvidence: evidenceList.map((e: any) => e.name || String(e)),
+        applicableLegalProvisions: [matchedEntry ? `${matchedEntry.actName} (${matchedEntry.section})` : 'Applicable Rules & Regulations'],
+        requestedAction: desiredAssistance || 'Registration of complaint and necessary official inquiry.',
+        officialPortalUrl: matchedEntry?.officialUrl || 'https://eservices.tnpolice.gov.in/',
+        fullFormattedDraft: draftText,
+        fullFormattedDraftTamil: `பெறுநர்:\n${matchedEntry?.authorityTamil || 'காவல் நிலைய பொறுப்பு அதிகாரி'}\n\nபொருள்: ${category || 'சம்பவம்'} தொடர்பான புகார் மனு.\n\nமதிப்பிற்குரிய ஐயா / அம்மா,\n\n${incidentDate || 'குறிப்பிட்ட நாளில்'} ${location || 'குறிப்பிட்ட இடத்தில்'} நடந்த சம்பவம் குறித்து இந்த மனுவை சமர்ப்பிக்கிறேன்.\n\nநிகழ்ந்த விவரம்:\n${description}\n\nசட்டப் பிரிவு: ${matchedEntry ? matchedEntry.actNameTamil + ' (' + matchedEntry.section + ')' : 'பொருந்தக்கூடிய சட்டப் பிரிவுகள்'}\n\nகோரிக்கை:\n${desiredAssistance || 'இந்த மனுவை ஏற்று உரிய சட்டப்பூர்வ நடவடிக்கை எடுக்குமாறு பணிவுடன் கேட்டுக்கொள்கிறேன்.'}\n\nஇங்ஙனம்,\n[மனுதாரர் பெயர்]`
+      }
     });
   }
 });

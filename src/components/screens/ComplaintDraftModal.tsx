@@ -16,11 +16,14 @@ import {
   Shield,
   Layers,
   PhoneCall,
-  Sparkles
+  Sparkles,
+  Printer,
+  Share2,
 } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../../utils/translations';
 import { IncidentReportData, updateIncidentReportStatus } from '../../services/firebase';
 import { OFFICIAL_GRIEVANCE_PORTALS, OfficialGrievancePortal } from '../../data/officialPortals';
+import { getLegalActionForCategory } from '../../data/legalActionProvisions';
 
 interface Props {
   isOpen: boolean;
@@ -54,6 +57,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
   });
 
   const selectedPortal = OFFICIAL_GRIEVANCE_PORTALS.find((p) => p.id === selectedPortalId) || OFFICIAL_GRIEVANCE_PORTALS[0];
+  const legalInfo = getLegalActionForCategory(reportData.category || '');
 
   // Editable draft body
   const [editableDraftText, setEditableDraftText] = useState<string>(() => {
@@ -67,6 +71,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
     reportData.status || 'draft_created'
   );
   const [copied, setCopied] = useState(false);
+  const [portalUrlCopied, setPortalUrlCopied] = useState(false);
   const [portalLaunchToast, setPortalLaunchToast] = useState<string | null>(null);
 
   const handleCopy = async () => {
@@ -76,40 +81,100 @@ export const ComplaintDraftModal: React.FC<Props> = ({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback
-    }
-  };
-
-  const handleDownload = () => {
-    const blob = new Blob([editableDraftText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `SafeRoute_Complaint_Draft_${Date.now()}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleOpenOfficialChannel = async () => {
-    // 1. Auto-copy draft to clipboard so user can easily paste on the official portal
-    try {
-      await navigator.clipboard.writeText(editableDraftText);
+      const ta = document.createElement('textarea');
+      ta.value = editableDraftText;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
       setCopied(true);
-    } catch (e) {
-      console.warn('Clipboard write error:', e);
+      setTimeout(() => setCopied(false), 2000);
     }
+  };
 
+  const handleCopyPortalUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(selectedPortal.portalUrl);
+      setPortalUrlCopied(true);
+      setTimeout(() => setPortalUrlCopied(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
+
+  // Cross-browser reliable text download
+  const handleDownload = () => {
+    try {
+      const cleanFileName = `SafeRoute_${(reportData.category || 'Complaint').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.txt`;
+      const blob = new Blob([editableDraftText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = cleanFileName;
+      link.setAttribute('download', cleanFileName);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 300);
+    } catch (e) {
+      console.warn('Download error:', e);
+    }
+  };
+
+  // Print or Save as PDF
+  const handlePrint = () => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <title>SafeRoute AI — Formal Grievance Letter</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #0f172a; line-height: 1.6; }
+                h1 { font-size: 20px; font-weight: 800; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 4px; }
+                .meta { font-size: 12px; color: #64748b; margin-bottom: 24px; }
+                .draft { white-space: pre-wrap; font-family: "Courier New", Courier, monospace; font-size: 13px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; line-height: 1.7; }
+                .footer { margin-top: 30px; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+              </style>
+            </head>
+            <body>
+              <h1>SafeRoute AI — Citizen Grievance Submission</h1>
+              <div class="meta">Category: ${reportData.category || 'Incident'} • Target Authority: ${selectedPortal.name}</div>
+              <div class="draft">${editableDraftText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+              <div class="footer">Generated via SafeRoute AI Citizen Grievance Drafting Engine • Certified Statutory Representation</div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 300);
+      } else {
+        window.print();
+      }
+    } catch (err) {
+      window.print();
+    }
+  };
+
+  const handlePortalLaunchClick = () => {
+    // 1. Auto-copy draft text to clipboard
+    handleCopy();
+
+    // 2. Toast notification
     setPortalLaunchToast(
       isTamil
-        ? `புகார் மனு நகலெடுக்கப்பட்டது! ${selectedPortal.nameTamil.split('(')[0]} இணையதளம் திறக்கப்படுகிறது...`
-        : `Complaint draft copied! Launching ${selectedPortal.name.split('/')[0]} portal...`
+        ? `புகார் மனு நகலெடுக்கப்பட்டது! ${selectedPortal.nameTamil.split('(')[0]} இணையதளம் திறக்கப்பட்டுள்ளது.`
+        : `Complaint draft copied! Launching ${selectedPortal.name.split('/')[0]}...`
     );
 
-    // 2. Open chosen official portal website
-    window.open(selectedPortal.portalUrl, '_blank', 'noopener,noreferrer');
-    
-    // 3. Update status to 'opened_official_channel'
+    // 3. Update status
     setCurrentStatus('opened_official_channel');
     if (reportData.userId && reportData.userId !== 'guest_user') {
       updateIncidentReportStatus(reportData.userId, reportData.id, 'opened_official_channel').catch(console.error);
@@ -124,7 +189,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
       });
     }
 
-    setTimeout(() => setPortalLaunchToast(null), 4500);
+    setTimeout(() => setPortalLaunchToast(null), 5000);
   };
 
   return (
@@ -208,7 +273,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
             </div>
           )}
 
-          {/* Authority Selection Section (User Request: "last la entha option la complaint nu kekanum antha option padi antha website la poitu complaint poganum") */}
+          {/* Authority Selection Section */}
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -274,20 +339,93 @@ export const ComplaintDraftModal: React.FC<Props> = ({
               })}
             </div>
 
-            {/* Selected Portal Target Banner */}
-            <div className="p-3 rounded-xl bg-slate-900/90 border border-cyan-500/30 flex items-center justify-between text-xs text-slate-300">
-              <div className="flex items-center gap-2 truncate">
-                <ExternalLink className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="font-semibold text-white truncate">
-                  {isTamil ? selectedPortal.nameTamil.split('(')[0] : selectedPortal.name}
+            {/* DIRECT LAUNCH & LINK VERIFICATION BOX (Fixes: "Complaint portal la direct ah complaint panrathuku link open aghala") */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/60 to-slate-900 border border-cyan-500/40 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <ExternalLink className="w-4 h-4 text-cyan-400" />
+                  <span>{isTamil ? 'நேரடி இணையதள முகவரி & இணைப்பு:' : 'Direct Official Portal Link:'}</span>
                 </span>
-                <span className="text-[11px] text-cyan-400 font-mono hidden sm:inline truncate">
-                  ({selectedPortal.portalUrl})
+                <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  {isTamil ? 'அரசு தளம் தயார்' : 'Ready'}
                 </span>
               </div>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider shrink-0">
-                {isTamil ? 'தயார்' : 'Target Ready'}
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                <span className="text-xs font-mono text-cyan-300 break-all select-all">
+                  {selectedPortal.portalUrl}
+                </span>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleCopyPortalUrl}
+                    className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-700 transition cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{portalUrlCopied ? (isTamil ? 'நகலெடுக்கப்பட்டது!' : 'Copied!') : (isTamil ? 'முகவரி நகல்' : 'Copy URL')}</span>
+                  </button>
+
+                  {/* Real HTML <a> Tag - NEVER BLOCKED by Browser Popup Blockers */}
+                  <a
+                    href={selectedPortal.portalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={handlePortalLaunchClick}
+                    className="flex items-center gap-1 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold px-3 py-1 rounded-lg transition cursor-pointer shadow-md"
+                  >
+                    <span>{isTamil ? 'திறக்க (Open)' : 'Open Portal'}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* STATUTORY LEGAL ACTIONS ("satta padi kaami") */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-blue-500/30 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Scale className="w-4 h-4 text-blue-400" />
+                <span>
+                  {isTamil
+                    ? 'சட்டப்படி நடவடிக்கைகள் & பிரிவுகள் (Statutory Provisions)'
+                    : 'Statutory Legal Action & Penalties under Indian Law'}
+                </span>
               </span>
+              <span className="text-[10px] text-blue-300 bg-blue-950 border border-blue-500/30 px-2 py-0.5 rounded-full font-mono">
+                {legalInfo.categoryKey}
+              </span>
+            </div>
+
+            <div className="text-xs text-blue-200/90 bg-blue-950/40 p-3 rounded-xl border border-blue-500/20 leading-relaxed">
+              <span className="font-bold text-white block mb-1">
+                {isTamil ? legalInfo.statutoryActTamil : legalInfo.statutoryAct}:
+              </span>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-300">
+                {(isTamil ? legalInfo.applicableSectionsTamil : legalInfo.applicableSections).map((sec, idx) => (
+                  <li key={idx}>{sec}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block mb-0.5">
+                  {isTamil ? 'சட்டப்படி உங்கள் உரிமைகள்:' : 'Citizen Statutory Rights:'}
+                </span>
+                <p className="text-[11px] text-slate-300">
+                  {(isTamil ? legalInfo.citizenRightsTamil : legalInfo.citizenRights).slice(0, 2).join(' • ')}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block mb-0.5">
+                  {isTamil ? 'சட்டப்படி தண்டனை / அபராதம்:' : 'Statutory Penalty / Liability:'}
+                </span>
+                <p className="text-[11px] text-slate-300">
+                  {isTamil ? legalInfo.penaltyUnderLawTamil : legalInfo.penaltyUnderLaw}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -319,7 +457,7 @@ export const ComplaintDraftModal: React.FC<Props> = ({
 
         {/* Modal Actions */}
         <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer"
@@ -332,23 +470,35 @@ export const ComplaintDraftModal: React.FC<Props> = ({
               onClick={handleDownload}
               className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>{t.downloadDraft}</span>
+              <Download className="w-3.5 h-3.5 text-blue-400" />
+              <span>{isTamil ? 'பதிவிறக்கம் (.txt)' : 'Download .TXT'}</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{isTamil ? 'அச்சு / PDF' : 'Print / PDF'}</span>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleOpenOfficialChannel}
+            {/* Real HTML <a> Tag Launch Button */}
+            <a
+              href={selectedPortal.portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handlePortalLaunchClick}
               className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl transition cursor-pointer shadow-lg active:scale-95"
             >
               <span>
                 {isTamil
                   ? `புகாரை நகலெடுத்து இணையதளத்திற்குச் செல்`
-                  : `Copy Draft & Proceed to ${selectedPortal.badge}`}
+                  : `Copy Draft & Open ${selectedPortal.badge}`}
               </span>
               <ExternalLink className="w-4 h-4" />
-            </button>
+            </a>
           </div>
         </div>
       </div>
