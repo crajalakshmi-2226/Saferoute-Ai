@@ -40,12 +40,26 @@
         <div style="font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #94a3b8; margin-bottom: 24px;">
           Routes that understand you
         </div>
-        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; font-family: monospace;">
+        <div id="splash-status" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; font-family: monospace;">
           <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #3b82f6;"></div>
           <span>Loading accessible routes...</span>
         </div>
+        <div id="splash-retry" style="display: none; margin-top: 16px;">
+          <button onclick="window.location.reload()" style="background-color: #2563eb; color: #ffffff; border: none; padding: 8px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer;">
+            Tap to Refresh / புதுப்பிக்க அழுத்தவும்
+          </button>
+        </div>
       </div>
     </div>
+    <script>
+      // Watchdog: If splash screen remains after 3.5s on slow mobile data, show refresh button
+      setTimeout(function() {
+        var retryEl = document.getElementById('splash-retry');
+        if (retryEl) {
+          retryEl.style.display = 'block';
+        }
+      }, 3500);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -29,13 +29,18 @@ import {
 } from 'lucide-react';
 import { TRANSLATIONS, Language } from '../../utils/translations';
 import { Coordinates } from '../../types';
-import { requestCurrentPosition } from '../../services/locationService';
+import { requestCurrentPosition, POPULAR_LOCATION_PRESETS } from '../../services/locationService';
 import {
   VERIFIED_HELP_PLACES,
   NearbyHelpPlace,
   formatDistance,
 } from '../../data/nearbyHelpData';
-import { enrichNearbyPlace, NearbyPlaceEnriched } from '../../services/nearbyPlacesService';
+import {
+  enrichNearbyPlace,
+  getNearbyPlacesForLocation,
+  detectLocalityName,
+  NearbyPlaceEnriched,
+} from '../../services/nearbyPlacesService';
 import { NearbyPlaceCard } from '../NearbyPlaceCard';
 
 interface Props {
@@ -62,12 +67,15 @@ export const NearbyHelpScreen: React.FC<Props> = ({
   const [maxDistanceMeters, setMaxDistanceMeters] = useState<number>(15000); // 15 km default
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [manualOverrideCoords, setManualOverrideCoords] = useState<Coordinates | null>(null);
 
-  // Effective location: Live GPS or default reference
-  const effectiveLocation: Coordinates = currentLocation || {
+  // Effective location: Manual preset or live GPS or default reference
+  const effectiveLocation: Coordinates = manualOverrideCoords || currentLocation || {
     lat: 13.0827,
     lng: 80.2707,
   };
+
+  const detectedLocality = detectLocalityName(effectiveLocation);
 
   const categories = [
     { id: 'all', label: isTamil ? 'அனைத்து இடங்கள்' : 'All Places', icon: Compass },
@@ -83,16 +91,16 @@ export const NearbyHelpScreen: React.FC<Props> = ({
     { id: 'civic_office', label: t.civicFilter, icon: Building2 },
   ];
 
-  // Enrich all verified places with travel times (walk, bike, car), dynamic open hours status & shortcut analysis
-  const enrichedPlaces: NearbyPlaceEnriched[] = VERIFIED_HELP_PLACES.map((place) =>
-    enrichNearbyPlace(place, effectiveLocation)
-  ).sort((a, b) => a.distanceMeters - b.distanceMeters);
+  // Resolve all verified places directly near effectiveLocation (200m - 1.5km nearest first)
+  const placesNearUser = getNearbyPlacesForLocation(
+    effectiveLocation,
+    activeCategory,
+    maxDistanceMeters,
+    detectedLocality
+  );
 
-  // Filter based on active category & search query
-  let filteredPlaces = enrichedPlaces.filter((place) => {
-    if (activeCategory !== 'all' && place.category !== activeCategory) {
-      return false;
-    }
+  // Filter based on search query
+  let filteredPlaces = placesNearUser.filter((place) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchesName =
@@ -109,15 +117,6 @@ export const NearbyHelpScreen: React.FC<Props> = ({
     return true;
   });
 
-  // Apply distance filter, but if 0 results found (e.g. user is in another city),
-  // automatically show closest verified state facilities so user is never left stranded!
-  const withinRadius = filteredPlaces.filter((p) => p.distanceMeters <= maxDistanceMeters);
-  if (withinRadius.length > 0) {
-    filteredPlaces = withinRadius;
-  } else {
-    filteredPlaces = filteredPlaces.slice(0, 10);
-  }
-
   return (
     <div className="space-y-6 pb-24 max-w-4xl mx-auto">
       {/* Hero Header */}
@@ -132,33 +131,68 @@ export const NearbyHelpScreen: React.FC<Props> = ({
             </h1>
             <p className="text-xs text-slate-400">
               {isTamil
-                ? 'மருத்துவமனை, மருந்தகம், காவல் நிலையம், அஞ்சல் நிலையம், கடைகள், சந்தை — செல்லும் நேரம், திறந்திருக்கும் நேரம் & குறுக்கு வழியில் படிகள் உள்ளதா என்ற உண்மை விவரங்கள்.'
-                : 'Hospitals, medicals, police, post office, shops, markets — reach times, verified open hours & shortcut stair/narrow path analysis.'}
+                ? 'மருத்துவமனை, மருந்தகம், காவல் நிலையம், மகளிர் காவல் நிலையம், அஞ்சல் நிலையம், கடைகள், சந்தை — செல்லும் நேரம் & குறுக்கு வழியில் படிகள் உள்ளதா என்ற உண்மை விவரங்கள்.'
+                : 'Hospitals, 24x7 medicals, police, women police (AWPS), post office, shops, markets — reach times & shortcut physical condition.'}
             </p>
           </div>
         </div>
 
         {/* Location Status & Instant Trigger */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 border border-slate-800 rounded-2xl p-3">
-          <div className="flex items-center gap-2 text-xs">
-            <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
-            <span className="text-slate-300">
-              {currentLocation
-                ? `GPS: (${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}) — Live Location Active`
-                : isTamil
-                ? 'தமிழ்நாடு முதன்மை இருப்பிடம் (GPS இயக்க கீழே அழுத்தவும்)'
-                : 'Using Tamil Nadu Reference (Tap below to activate live GPS)'}
-            </span>
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/80 border border-slate-800 rounded-2xl p-3">
+          <div className="flex items-start sm:items-center gap-2.5 text-xs">
+            <MapPin className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-white text-xs sm:text-sm">
+                  {isTamil ? detectedLocality.nameTamil : detectedLocality.name}
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                  {manualOverrideCoords
+                    ? (isTamil ? 'தேர்ந்தெடுக்கப்பட்ட இடம்' : 'Preset Selected')
+                    : currentLocation
+                    ? (isTamil ? 'நேரடி GPS' : 'Live GPS Active')
+                    : (isTamil ? 'இயல்புநிலை' : 'Default Reference')}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {isTamil
+                  ? `(${effectiveLocation.lat.toFixed(4)}, ${effectiveLocation.lng.toFixed(4)}) — 200மீ முதல் 1.5 கி.மீ வரையிலான மிக அருகிலுள்ள இடங்கள்`
+                  : `GPS: (${effectiveLocation.lat.toFixed(4)}, ${effectiveLocation.lng.toFixed(4)}) — Showing physical amenities from 200m to 1.5km`}
+              </p>
+            </div>
           </div>
 
-          <button
-            onClick={onUseCurrentLocation}
-            disabled={isLocating}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer active:scale-95 disabled:opacity-50"
-          >
-            <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-            <span>{isLocating ? (isTamil ? 'GPS தேடுகிறது...' : 'Acquiring GPS...') : t.useCurrentGps}</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setManualOverrideCoords(null);
+                onUseCurrentLocation();
+              }}
+              disabled={isLocating}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl transition cursor-pointer active:scale-95 disabled:opacity-50 shadow-md"
+            >
+              <Locate className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+              <span>{isLocating ? (isTamil ? 'GPS தேடுகிறது...' : 'Acquiring GPS...') : (isTamil ? 'என் இருப்பிடம் (GPS)' : 'My Location (GPS)')}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Area Switcher Chips */}
+        <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-thin">
+          <span className="text-slate-400 shrink-0 font-medium">{isTamil ? 'இடங்கள்:' : 'Quick Areas:'}</span>
+          {POPULAR_LOCATION_PRESETS.slice(0, 6).map((preset) => (
+            <button
+              key={preset.name}
+              onClick={() => setManualOverrideCoords(preset.coords)}
+              className={`shrink-0 px-2.5 py-1 rounded-lg border transition text-[11px] ${
+                effectiveLocation.lat === preset.coords.lat && effectiveLocation.lng === preset.coords.lng
+                  ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 font-semibold'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+              }`}
+            >
+              {isTamil ? preset.nameTamil : preset.name.split(',')[0]}
+            </button>
+          ))}
         </div>
       </div>
 

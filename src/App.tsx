@@ -302,6 +302,20 @@ export default function App() {
       }
     }
     loadBarriers();
+
+    // Auto-acquire current location in background on mount if not yet available
+    if (!currentLocation) {
+      requestCurrentPosition({
+        preferInstant: true,
+        onImmediateLocation: (coords) => setCurrentLocation(coords),
+      })
+        .then((res) => {
+          if (res.coordinates) {
+            setCurrentLocation(res.coordinates);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   // Handle GPS Current Location Request with INSTANT response

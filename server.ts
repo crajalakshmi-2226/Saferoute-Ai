@@ -12,6 +12,7 @@ import {
   VERIFIED_HELP_PLACES,
   getDistanceMeters,
 } from './src/data/nearbyHelpData.ts';
+import { getNearbyPlacesForLocation } from './src/services/nearbyPlacesService.ts';
 
 dotenv.config();
 
@@ -750,49 +751,35 @@ Output strictly valid JSON with this schema:
 app.get('/api/nearby-help', (req, res) => {
   const { lat, lng, category, maxDistanceMeters, search } = req.query;
 
-  let results = [...VERIFIED_HELP_PLACES];
+  const userLat = lat ? parseFloat(String(lat)) : undefined;
+  const userLng = lng ? parseFloat(String(lng)) : undefined;
 
-  // Category filter
-  if (category && typeof category === 'string' && category !== 'all') {
-    results = results.filter((p) => p.category === category);
+  let mapped: any[];
+
+  if (userLat !== undefined && userLng !== undefined && !isNaN(userLat) && !isNaN(userLng)) {
+    const maxDist = maxDistanceMeters ? parseFloat(String(maxDistanceMeters)) : 15000;
+    mapped = getNearbyPlacesForLocation(
+      { lat: userLat, lng: userLng },
+      typeof category === 'string' ? category : 'all',
+      maxDist
+    );
+  } else {
+    mapped = [...VERIFIED_HELP_PLACES];
+    if (category && typeof category === 'string' && category !== 'all') {
+      mapped = mapped.filter((p) => p.category === category);
+    }
   }
 
   // Text search
   if (search && typeof search === 'string') {
     const s = search.toLowerCase();
-    results = results.filter(
+    mapped = mapped.filter(
       (p) =>
         p.name.toLowerCase().includes(s) ||
-        p.nameTamil.toLowerCase().includes(s) ||
-        p.address.toLowerCase().includes(s) ||
-        p.servicesAvailable.some((serv) => serv.toLowerCase().includes(s))
+        (p.nameTamil && p.nameTamil.toLowerCase().includes(s)) ||
+        (p.address && p.address.toLowerCase().includes(s)) ||
+        (p.servicesAvailable && p.servicesAvailable.some((serv: string) => serv.toLowerCase().includes(s)))
     );
-  }
-
-  // Distance computation
-  const userLat = lat ? parseFloat(String(lat)) : undefined;
-  const userLng = lng ? parseFloat(String(lng)) : undefined;
-
-  let mapped = results.map((place) => {
-    let distanceMeters: number | undefined;
-    if (userLat !== undefined && userLng !== undefined && !isNaN(userLat) && !isNaN(userLng)) {
-      distanceMeters = getDistanceMeters(userLat, userLng, place.lat, place.lng);
-    }
-    return {
-      ...place,
-      distanceMeters
-    };
-  });
-
-  if (userLat !== undefined && userLng !== undefined) {
-    mapped.sort((a, b) => (a.distanceMeters || 0) - (b.distanceMeters || 0));
-
-    if (maxDistanceMeters) {
-      const maxDist = parseFloat(String(maxDistanceMeters));
-      if (!isNaN(maxDist)) {
-        mapped = mapped.filter((p) => p.distanceMeters !== undefined && p.distanceMeters <= maxDist);
-      }
-    }
   }
 
   res.json({
