@@ -201,7 +201,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* 4. SHORTCUT & ACCESSIBILITY SECTION (User Request: "shortcut irukaa , oruvela shortcut iruntha anga stairs Iruka , narrow path ah , Ellaru antha path valiya pogalama nu kamikanum") */}
+      {/* 4. SHORTCUT & ACCESSIBILITY SECTION (User Request: "shortcut irukaa , oruvela shortcut iruntha anga stairs Iruka , narrow path ah , Ellaru antha path valiya pogalama nu kamikanum with path details") */}
       <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-blue-500/25 p-3.5 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -212,7 +212,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
               <span className="text-xs font-bold text-white flex items-center gap-1.5">
                 <span>{isTamil ? 'குறுக்கு வழி (Shortcut) & பாதை ஆய்வு' : 'Shortcut & Pathway Accessibility Check'}</span>
                 {s.hasShortcut && (
-                  <span className="text-[10px] bg-cyan-950 text-cyan-300 font-mono font-bold px-2 py-0.2 rounded-full border border-cyan-500/40">
+                  <span className="text-[10px] bg-cyan-950 text-cyan-300 font-mono font-bold px-2 py-0.5 rounded-full border border-cyan-500/40">
                     {isTamil ? `-${s.timeSavedMinutes} நிமிடம் மிச்சம்` : `Saves ~${s.timeSavedMinutes}m`}
                   </span>
                 )}
@@ -231,9 +231,9 @@ export const NearbyPlaceCard: React.FC<Props> = ({
 
           <button
             onClick={() => setShowShortcutDetails(!showShortcutDetails)}
-            className="flex items-center gap-1 text-xs font-bold text-blue-400 hover:text-blue-300 px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 transition cursor-pointer"
+            className="flex items-center gap-1 text-xs font-bold text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 transition cursor-pointer active:scale-95 shadow-sm"
           >
-            <span>{showShortcutDetails ? (isTamil ? 'மறை' : 'Hide') : (isTamil ? 'விவரம்' : 'Details')}</span>
+            <span>{showShortcutDetails ? (isTamil ? 'பாதை விவரங்களை மறை' : 'Hide Path Details') : (isTamil ? 'முழு பாதை விவரங்கள்' : 'Full Path Details')}</span>
             {showShortcutDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
@@ -269,7 +269,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
               {s.isNarrowPath ? (
                 <>
                   <Octagon className="w-3 h-3 shrink-0" />
-                  <span>{isTamil ? 'குறுகிய சந்து (<80cm)' : 'Narrow (<80cm)'}</span>
+                  <span>{isTamil ? `குறுகியது (${s.pathWidthCm || 75}cm)` : `Narrow (${s.pathWidthCm || 75}cm)`}</span>
                 </>
               ) : (
                 <>
@@ -321,11 +321,108 @@ export const NearbyPlaceCard: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Detailed Expandable Section */}
+        {/* Detailed Turn-by-Turn Path Comparison & Profile Evaluation Section */}
         {showShortcutDetails && (
-          <div className="pt-2 border-t border-slate-800/80 space-y-2.5 animate-in fade-in duration-150">
+          <div className="pt-3 border-t border-slate-800/80 space-y-3.5 animate-in fade-in duration-200">
+            {/* Side-by-side or stacked Path Comparison: Main Road vs Shortcut */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Option A: Main Road Path (Standard, Step-Free) */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">🛣️</span>
+                    <span className="font-extrabold text-white text-xs">
+                      {isTamil ? s.mainRoadPath?.titleTamil || 'பிரதான பொதுச் சாலை' : s.mainRoadPath?.title || 'Main Public Arterial Road'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/20">
+                    {s.mainRoadPath?.distanceFormatted || s.mainRoadDistanceFormatted} • {isTamil ? s.mainRoadPath?.durationFormattedTamil || '7 நிமிடம்' : s.mainRoadPath?.durationFormatted || '7 mins'}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-300 space-y-1 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/70">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                    {isTamil ? 'படி படியான வழித்தடம் (Turn-by-Turn Steps):' : 'Turn-by-Turn Directions:'}
+                  </span>
+                  {(isTamil ? s.mainRoadPath?.stepByStepDirectionsTamil : s.mainRoadPath?.stepByStepDirections)?.map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-1.5 text-slate-300">
+                      <span className="text-blue-400 font-bold font-mono text-[10px] mt-0.5">{idx + 1}.</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[10px] text-slate-400">
+                  <div className="bg-slate-900 p-1.5 rounded-lg flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span>{isTamil ? 'படிகள் இல்லை (சமம்)' : 'Zero stairs (flat)'}</span>
+                  </div>
+                  <div className="bg-slate-900 p-1.5 rounded-lg flex items-center gap-1">
+                    <Sun className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span>{isTamil ? 'தெருவிளக்குகள் உண்டு' : 'Well-lit street'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Option B: Shortcut Path */}
+              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="font-extrabold text-cyan-200 text-xs">
+                      {isTamil ? s.shortcutPath?.titleTamil || 'குறுக்கு வழிப் பாதை' : s.shortcutPath?.title || 'Shortcut Lane Passage'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                    {s.shortcutPath?.distanceFormatted || s.shortcutDistanceFormatted} • {isTamil ? `-${s.timeSavedMinutes} நிமிடம் மிச்சம்` : `Saves ${s.timeSavedMinutes}m`}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-300 space-y-1 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/70">
+                  <span className="text-[10px] uppercase font-bold text-cyan-300 block tracking-wider">
+                    {isTamil ? 'குறுக்கு வழி படியான வழித்தடம்:' : 'Shortcut Step-by-Step Directions:'}
+                  </span>
+                  {(isTamil ? s.shortcutPath?.stepByStepDirectionsTamil : s.shortcutPath?.stepByStepDirections)?.map((step, idx) => (
+                    <div key={idx} className="flex items-start gap-1.5 text-slate-300">
+                      <span className="text-cyan-400 font-bold font-mono text-[10px] mt-0.5">{idx + 1}.</span>
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                  <div className="bg-slate-900 p-1.5 rounded-lg flex items-center gap-1">
+                    {s.hasStairs ? (
+                      <>
+                        <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span className="text-amber-300">{isTamil ? `${s.stairCount || 9} படிகள் உண்டு` : `${s.stairCount || 9} stairs`}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-300">{isTamil ? 'படிகள் இல்லை' : 'Step-free'}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="bg-slate-900 p-1.5 rounded-lg flex items-center gap-1">
+                    {s.isNarrowPath ? (
+                      <>
+                        <Octagon className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span className="text-amber-300">{isTamil ? `குறுகியது (${s.pathWidthCm || 75}cm)` : `Narrow (${s.pathWidthCm || 75}cm)`}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-300">{isTamil ? 'அகலமான பாதை' : 'Wide path'}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* "Ellaru antha path valiya pogalama?" Verdict Card */}
-            <div className="p-3 rounded-2xl bg-slate-950 border border-blue-500/30 space-y-2 text-xs">
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-blue-500/30 space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-extrabold text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-cyan-400" />
@@ -343,7 +440,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
               {/* Profile by Profile Breakdown */}
               <div className="space-y-1.5 pt-1 text-[11px]">
                 {/* Wheelchair / Strollers */}
-                <div className="flex items-start gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                <div className="flex items-start gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
                   <span className="text-base leading-none">♿</span>
                   <div className="flex-1">
                     <span className="font-bold text-slate-200 block">
@@ -356,7 +453,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
                 </div>
 
                 {/* Elderly */}
-                <div className="flex items-start gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                <div className="flex items-start gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
                   <span className="text-base leading-none">👴</span>
                   <div className="flex-1">
                     <span className="font-bold text-slate-200 block">
@@ -369,7 +466,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
                 </div>
 
                 {/* Women Night Safety */}
-                <div className="flex items-start gap-2 bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+                <div className="flex items-start gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
                   <span className="text-base leading-none">👩</span>
                   <div className="flex-1">
                     <span className="font-bold text-slate-200 block">
@@ -383,7 +480,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
               </div>
 
               {/* Clear Final Recommendation */}
-              <div className="p-2.5 rounded-xl bg-blue-950/60 border border-blue-500/40 text-[11px] text-blue-200 flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-blue-950/60 border border-blue-500/40 text-[11px] text-blue-200 flex items-start gap-2">
                 <span className="font-bold text-cyan-300 shrink-0">
                   {isTamil ? 'இறுதி பரிந்துரை:' : 'Final Advice:'}
                 </span>
@@ -430,7 +527,7 @@ export const NearbyPlaceCard: React.FC<Props> = ({
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer active:scale-95 shadow-md"
           >
             <Navigation className="w-3.5 h-3.5" />
-            <span>{isTamil ? 'வழித்தடம் காண்' : 'Get Directions'}</span>
+            <span>{isTamil ? 'வழித்தடம் & வழிகாட்டல்' : 'Plan & Navigate Route'}</span>
           </button>
 
           <a
